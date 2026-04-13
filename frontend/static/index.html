@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Anonymous Music Streaming</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Optional FontAwesome for better icons (commented, uncomment if needed) -->
+    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"> -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Anonymous Streaming</h1>
+
+        <div class="upload-section">
+            <h2>📁 Upload Music</h2>
+            <input type="file" id="fileInput" accept=".mp3,.flac,.wav">
+            <button id="uploadBtn">Upload</button>
+            <div id="uploadStatus"></div>
+        </div>
+
+        <div class="charts-section">
+            <h2>🔥 Hot 24h</h2>
+            <ul id="chartList"></ul>
+        </div>
+
+        <div class="tracks-section">
+            <h2>🎧 All Tracks</h2>
+            <ul id="trackList"></ul>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
