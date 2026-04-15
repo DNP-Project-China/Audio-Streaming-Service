@@ -1,0 +1,337 @@
+openapi: 3.1.0
+info:
+  title: AnonFM Core API (Student 1)
+  version: 0.1.0
+  summary: MVP contract for upload, tracks listing, and original file download.
+  description: |
+    OpenAPI contract for the Student 1 service only.
+    This service is a single entry point for:
+    - accepting track uploads
+    - returning tracks for UI
+    - generating temporary S3 download URLs
+
+    Non-goals for this contract:
+    - transcoder worker internals
+    - playback ping/stop collector API
+    - analytics processor internals
+
+tags:
+  - name: Health
+    description: Service liveness/readiness
+  - name: Tracks
+    description: Track upload and metadata access
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                ok:
+                  value:
+                    status: ok
+
+  /upload:
+    post:
+      tags: [Tracks]
+      summary: Upload a new audio file
+      description: |
+        Accepts one audio file and creates a track in `pending` status.
+        Service stores the original file in S3 with a generated unique name/key
+        and publishes a transcode job event.
+      operationId: uploadTrack
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, artist, title]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Audio file (mp3, flac, wav)
+                artist:
+                  type: string
+                  maxLength: 255
+                  description: Artist name
+                title:
+                  type: string
+                  maxLength: 255
+                  description: Song title
+      responses:
+        '201':
+          description: Track accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackUploadResponse'
+              examples:
+                created:
+                  value:
+                    track_id: 2cb9c72b-8f4f-44fd-94db-34d8891f214b
+                    artist: Eminem
+                    title: Mock Song
+                    original_filename: eminem-mock.mp3
+                    status: pending
+                    uploaded_at: '2026-04-15T12:25:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /tracks:
+    get:
+      tags: [Tracks]
+      summary: List tracks for UI
+      description: |
+        Returns tracks sorted by newest first.
+        By default, only `ready` tracks are returned for playback UI.
+      operationId: listTracks
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by processing status
+          schema:
+            $ref: '#/components/schemas/TrackStatus'
+      responses:
+        '200':
+          description: Track list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrackListResponse'
+              examples:
+                readyOnly:
+                  value:
+                    items:
+                      - track_id: 2cb9c72b-8f4f-44fd-94db-34d8891f214b
+                        artist: Eminem
+                        title: Mock Song
+                        original_filename: eminem-mock.mp3
+                        original_size: 5984454
+                        status: ready
+                        uploaded_at: '2026-04-15T12:25:00Z'
+                    total: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /download/{track_id}:
+    get:
+      tags: [Tracks]
+      summary: Get direct original file URL
+      description: Returns direct S3 URL for downloading the original file.
+      operationId: getDownloadUrl
+      parameters:
+        - $ref: '#/components/parameters/TrackIdPath'
+      responses:
+        '200':
+          description: S3 URL returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadURLResponse'
+              examples:
+                signedUrl:
+                  value:
+                    track_id: 2cb9c72b-8f4f-44fd-94db-34d8891f214b
+                    original_filename: eminem-mock.mp3
+                    download_url: https://s3.example.com/raw/2cb9c72b-8f4f-44fd-94db-34d8891f214b/original.mp3
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    TrackIdPath:
+      name: track_id
+      in: path
+      required: true
+      description: Track UUID
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+
+    TrackStatus:
+      type: string
+      enum: [pending, processing, ready, failed]
+
+    Track:
+      type: object
+      required:
+        - track_id
+        - artist
+        - title
+        - original_filename
+        - original_size
+        - status
+        - uploaded_at
+      properties:
+        track_id:
+          type: string
+          format: uuid
+        artist:
+          type: string
+          maxLength: 255
+        title:
+          type: string
+          maxLength: 255
+        original_filename:
+          type: string
+          maxLength: 255
+        original_size:
+          type: integer
+          format: int64
+          minimum: 0
+        status:
+          $ref: '#/components/schemas/TrackStatus'
+        uploaded_at:
+          type: string
+          format: date-time
+
+    TrackUploadResponse:
+      type: object
+      required: [track_id, artist, title, original_filename, status, uploaded_at]
+      properties:
+        track_id:
+          type: string
+          format: uuid
+        artist:
+          type: string
+        title:
+          type: string
+        original_filename:
+          type: string
+        status:
+          $ref: '#/components/schemas/TrackStatus'
+        uploaded_at:
+          type: string
+          format: date-time
+
+    TrackListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Track'
+        total:
+          type: integer
+          minimum: 0
+
+    DownloadURLResponse:
+      type: object
+      required: [track_id, original_filename, download_url]
+      properties:
+        track_id:
+          type: string
+          format: uuid
+        original_filename:
+          type: string
+        download_url:
+          type: string
+          format: uri
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          examples: [invalid_request]
+        message:
+          type: string
+          examples: [unsupported audio format]
+        details:
+          type: object
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Validation error in request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            badRequest:
+              value:
+                error: invalid_request
+                message: one or more parameters are invalid
+
+    NotFound:
+      description: Track was not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            notFound:
+              value:
+                error: not_found
+                message: track not found
+
+    PayloadTooLarge:
+      description: Uploaded file exceeds configured size limit
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            tooLarge:
+              value:
+                error: payload_too_large
+                message: file exceeds max size
+
+    UnsupportedMediaType:
+      description: Audio format is not supported
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unsupported:
+              value:
+                error: unsupported_media_type
+                message: supported formats are mp3, flac, wav
+
+    InternalServerError:
+      description: Unexpected server or dependency error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            internal:
+              value:
+                error: internal_error
+                message: unexpected error
