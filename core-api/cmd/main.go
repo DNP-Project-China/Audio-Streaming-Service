@@ -1,11 +1,21 @@
 package main
 
 import (
-	"fmt"
+	"net/http"
 
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server"
+	"github.com/sirupsen/logrus"
+	"go.uber.org/fx"
 )
 
 func main() {
-	fmt.Println(server.Greet())
+	fx.New(
+		fx.Provide(
+			server.NewConfig,
+			server.NewHTTPServer,
+		),
+		fx.Invoke(func(cfg *server.Config, srv *http.Server) {
+			logrus.WithField("port", srv.Addr).Info("Starting server")
+		}),
+	).Run()
 }
