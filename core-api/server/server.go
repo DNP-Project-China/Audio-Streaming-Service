@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"net"
 	"net/http"
 
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server/routes"
@@ -29,5 +31,23 @@ func NewHTTPServer(lc fx.Lifecycle, cfg *Config, router *mux.Router) *http.Serve
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: router,
 	}
+
+	lc.Append(fx.Hook{
+		OnStart: func(ctx context.Context) error {
+			ln, err := net.Listen("tcp", srv.Addr)
+			if err != nil {
+				return err
+			}
+
+			logrus.WithField("port", srv.Addr).Info("Starting HTTP server")
+			go srv.Serve(ln)
+
+			return nil
+		},
+		OnStop: func(ctx context.Context) error {
+			return srv.Shutdown(ctx)
+		},
+	})
+
 	return srv
 }
