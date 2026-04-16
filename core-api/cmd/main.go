@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/repositories"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server/routes"
 	"go.uber.org/fx"
@@ -16,8 +17,11 @@ func main() {
 			routes.TakesRoutes(server.NewMux),
 			server.NewHTTPServer,
 		),
+		repositories.Module,
 
-		// Starting a web server
-		fx.Invoke(func(srv *http.Server) {}),
+		// Start web server
+		fx.Invoke(func(_ *http.Server) {
+
+		}),
 	).Run()
 }
