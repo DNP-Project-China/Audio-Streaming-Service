@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: migrate dev db-up db-down
+.PHONY: migrate dev db-up db-down kafka-up kafka-down
 
 migrate:
 	docker run --rm -v "$(PWD)/core-api:/src" -w /src/sqlc sqlc/sqlc generate
@@ -13,4 +13,10 @@ db-up:
 
 db-down:
 	docker compose down -v
+
+kafka-up:
+	docker compose up -d kafka
+
+kafka-down:
+	docker compose stop kafka
 
