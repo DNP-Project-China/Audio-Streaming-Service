@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -28,8 +29,12 @@ func NewMux(routes []routes.Route) *mux.Router {
 
 func NewHTTPServer(lc fx.Lifecycle, cfg *Config, router *mux.Router) *http.Server {
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: router,
+		Addr:              fmt.Sprintf(":%d", cfg.Port),
+		Handler:           router,
+		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
+		ReadTimeout:       cfg.HTTPReadTimeout,
+		WriteTimeout:      cfg.HTTPWriteTimeout,
+		IdleTimeout:       cfg.HTTPIdleTimeout,
 	}
 
 	lc.Append(fx.Hook{
@@ -40,7 +45,11 @@ func NewHTTPServer(lc fx.Lifecycle, cfg *Config, router *mux.Router) *http.Serve
 			}
 
 			logrus.WithField("port", srv.Addr).Info("Starting HTTP server")
-			go srv.Serve(ln)
+			go func() {
+				if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+					logrus.WithError(err).Error("HTTP server stopped unexpectedly")
+				}
+			}()
 
 			return nil
 		},
