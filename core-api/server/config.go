@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net/url"
+	"path"
 	"time"
 
 	"github.com/caarlos0/env/v11"
@@ -14,12 +15,32 @@ type Config struct {
 	HTTPReadTimeout       time.Duration `env:"CORE_API_READ_TIMEOUT" envDefault:"15s"`
 	HTTPWriteTimeout      time.Duration `env:"CORE_API_WRITE_TIMEOUT" envDefault:"15s"`
 	HTTPIdleTimeout       time.Duration `env:"CORE_API_IDLE_TIMEOUT" envDefault:"60s"`
+	S3Endpoint            string        `env:"S3_ENDPOINT,required"`
+	S3Region              string        `env:"S3_REGION" envDefault:"ru-1"`
+	S3Bucket              string        `env:"S3_BUCKET,required"`
+	S3AccessKey           string        `env:"S3_ACCESS_KEY,required"`
+	S3SecretKey           string        `env:"S3_SECRET_KEY,required"`
+	S3PublicBaseURL       string        `env:"S3_PUBLIC_BASE_URL,required"`
 	PostgresHost          string        `env:"POSTGRES_HOST" envDefault:"localhost"`
 	PostgresPort          int           `env:"POSTGRES_PORT" envDefault:"5432"`
 	PostgresUser          string        `env:"POSTGRES_USER,required"`
 	PostgresPassword      string        `env:"POSTGRES_PASSWORD,required"`
 	PostgresDB            string        `env:"POSTGRES_DB,required"`
 	PostgresSSLMode       string        `env:"POSTGRES_SSLMODE" envDefault:"disable"`
+}
+
+func (c *Config) BuildPublicObjectURL(objectKey string) (string, error) {
+	if c.S3PublicBaseURL == "" {
+		return "", nil
+	}
+
+	base, err := url.Parse(c.S3PublicBaseURL)
+	if err != nil {
+		return "", err
+	}
+
+	base.Path = path.Join(base.Path, objectKey)
+	return base.String(), nil
 }
 
 func (c *Config) DatabaseURL() string {

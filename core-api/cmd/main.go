@@ -6,6 +6,8 @@ import (
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/repositories"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server/routes"
+	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/storage"
+	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/usecases"
 	"go.uber.org/fx"
 )
 
@@ -18,6 +20,8 @@ func main() {
 			server.NewHTTPServer,
 		),
 		repositories.Module,
+		storage.Module,
+		usecases.Module,
 
 		// Start web server
 		fx.Invoke(func(_ *http.Server) {
