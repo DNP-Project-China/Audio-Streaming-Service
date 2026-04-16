@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 
+	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/events"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/repositories"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server/handlers"
@@ -24,6 +25,7 @@ func main() {
 		repositories.Module,
 		storage.Module,
 		usecases.Module,
+		events.Module,
 
 		// Start web server
 		fx.Invoke(func(_ *http.Server) {

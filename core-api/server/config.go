@@ -21,6 +21,8 @@ type Config struct {
 	S3AccessKey           string        `env:"S3_ACCESS_KEY,required"`
 	S3SecretKey           string        `env:"S3_SECRET_KEY,required"`
 	S3PublicBaseURL       string        `env:"S3_PUBLIC_BASE_URL,required"`
+	KafkaBrokers          string        `env:"KAFKA_BROKERS" envDefault:"localhost:9094"`
+	KafkaTranscodeTopic   string        `env:"KAFKA_TRANSCODE_TOPIC" envDefault:"transcode-jobs"`
 	PostgresHost          string        `env:"POSTGRES_HOST" envDefault:"localhost"`
 	PostgresPort          int           `env:"POSTGRES_PORT" envDefault:"5432"`
 	PostgresUser          string        `env:"POSTGRES_USER,required"`

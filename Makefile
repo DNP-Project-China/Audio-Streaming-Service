@@ -9,7 +9,7 @@ dev:
 	trap 'exit 0' INT TERM; set -a && source .env && set +a && POSTGRES_HOST=localhost go run ./core-api/cmd/
 
 db-up:
-	docker compose up -d postgres
+	docker compose up -d postgres kafka
 
 db-down:
 	docker compose down -v

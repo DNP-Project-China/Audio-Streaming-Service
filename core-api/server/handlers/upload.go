@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/events"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/repositories"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/usecases"
 )
@@ -22,6 +23,7 @@ const (
 type UploadHandler struct {
 	queries *repositories.Queries
 	tracks  *usecases.TrackStorage
+	jobs    events.TranscodePublisher
 }
 
 type TrackUploadResponse struct {
@@ -38,8 +40,8 @@ type ErrorResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-func NewUploadHandler(queries *repositories.Queries, tracks *usecases.TrackStorage) *UploadHandler {
-	return &UploadHandler{queries: queries, tracks: tracks}
+func NewUploadHandler(queries *repositories.Queries, tracks *usecases.TrackStorage, jobs events.TranscodePublisher) *UploadHandler {
+	return &UploadHandler{queries: queries, tracks: tracks, jobs: jobs}
 }
 
 func (h *UploadHandler) Pattern() string {
@@ -110,6 +112,13 @@ func (h *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		_ = h.tracks.Delete(context.Background(), stored.Key)
 		h.respondError(w, http.StatusInternalServerError, "internal_error", "failed to create track metadata")
+		return
+	}
+
+	if err := h.jobs.PublishCreated(context.Background(), track.ID.String(), track.OriginalObjectKey, 1); err != nil {
+		_ = h.queries.DeleteTrackByID(context.Background(), track.ID)
+		_ = h.tracks.Delete(context.Background(), stored.Key)
+		h.respondError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue transcode job")
 		return
 	}
 

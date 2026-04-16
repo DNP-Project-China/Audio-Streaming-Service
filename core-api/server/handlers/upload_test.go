@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/events"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/repositories"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/storage"
@@ -30,7 +32,28 @@ type uploadResp struct {
 	UploadedAt       string `json:"uploaded_at"`
 }
 
+type spyPublisher struct {
+	called   bool
+	trackID  string
+	path     string
+	priority int
+	err      error
+}
+
+func (s *spyPublisher) PublishCreated(ctx context.Context, trackID string, path string, priority int) error {
+	s.called = true
+	s.trackID = trackID
+	s.path = path
+	s.priority = priority
+	return s.err
+}
+
+var _ events.TranscodePublisher = (*spyPublisher)(nil)
+
 func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
+	artist := "Eminem-test-ok"
+	title := fmt.Sprintf("Mock Song OK %d", time.Now().UnixNano())
+
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -49,7 +72,8 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 		t.Fatalf("new s3 storage: %v", err)
 	}
 	trackStore := usecases.NewTrackStorage(s3store)
-	h := NewUploadHandler(queries, trackStore)
+	pub := &spyPublisher{}
+	h := NewUploadHandler(queries, trackStore, pub)
 
 	fixturePath := filepath.Join("testdata", "testfile.mp3")
 	fixtureBytes, err := os.ReadFile(fixturePath)
@@ -59,8 +83,8 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 
 	body := &bytes.Buffer{}
 	mw := multipart.NewWriter(body)
-	_ = mw.WriteField("artist", "Eminem")
-	_ = mw.WriteField("title", "Mock Song")
+	_ = mw.WriteField("artist", artist)
+	_ = mw.WriteField("title", title)
 
 	fw, err := mw.CreateFormFile("file", "testfile.mp3")
 	if err != nil {
@@ -93,6 +117,18 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 	if out.Status != "pending" {
 		t.Fatalf("expected pending status, got %q", out.Status)
 	}
+	if out.Artist != artist || out.Title != title {
+		t.Fatalf("unexpected response metadata: artist=%q title=%q", out.Artist, out.Title)
+	}
+	if !pub.called {
+		t.Fatalf("expected transcode job publish call")
+	}
+	if pub.trackID != out.TrackID {
+		t.Fatalf("publisher trackID mismatch: want=%s got=%s", out.TrackID, pub.trackID)
+	}
+	if pub.priority != 1 {
+		t.Fatalf("expected priority=1, got %d", pub.priority)
+	}
 
 	var trackID pgtype.UUID
 	if err := trackID.Scan(out.TrackID); err != nil {
@@ -118,6 +154,73 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 	}
 	if err := queries.DeleteTrackByID(ctx, trackID); err != nil {
 		t.Fatalf("cleanup db row: %v", err)
+	}
+}
+
+func TestUpload_Returns500WhenPublishFails(t *testing.T) {
+	artist := "Eminem-test-fail"
+	title := fmt.Sprintf("Mock Song FAIL %d", time.Now().UnixNano())
+
+	cfg, err := server.NewConfig()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	ctx := context.Background()
+	pool, err := newTestPool(ctx, cfg)
+	if err != nil {
+		t.Fatalf("create db pool: %v", err)
+	}
+	defer pool.Close()
+
+	queries := repositories.New(pool)
+	s3store, err := storage.NewS3Storage(cfg)
+	if err != nil {
+		t.Fatalf("new s3 storage: %v", err)
+	}
+	trackStore := usecases.NewTrackStorage(s3store)
+	pub := &spyPublisher{err: fmt.Errorf("kafka unavailable")}
+	h := NewUploadHandler(queries, trackStore, pub)
+
+	fixturePath := filepath.Join("testdata", "testfile.mp3")
+	fixtureBytes, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+
+	body := &bytes.Buffer{}
+	mw := multipart.NewWriter(body)
+	_ = mw.WriteField("artist", artist)
+	_ = mw.WriteField("title", title)
+
+	fw, err := mw.CreateFormFile("file", "testfile.mp3")
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := fw.Write(fixtureBytes); err != nil {
+		t.Fatalf("write multipart payload: %v", err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	res := httptest.NewRecorder()
+	h.ServeHTTP(res, req)
+
+	if res.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d, body=%s", res.Code, res.Body.String())
+	}
+
+	tracks, err := queries.ListTracks(ctx)
+	if err != nil {
+		t.Fatalf("list tracks: %v", err)
+	}
+	for _, tr := range tracks {
+		if tr.Artist == artist && tr.Title == title {
+			t.Fatalf("expected rollback on publish failure, found track id=%s", tr.ID.String())
+		}
 	}
 }
 
