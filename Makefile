@@ -6,10 +6,10 @@ migrate:
 	docker run --rm -v "$(PWD)/core-api:/src" -w /src/sqlc sqlc/sqlc generate
 
 dev:
-	trap 'exit 0' INT TERM; set -a && source .env && set +a && POSTGRES_HOST=localhost go run ./core-api/cmd/
+	trap 'exit 0' INT TERM; set -a && source .env && set +a && POSTGRES_HOST=localhost POSTGRES_PORT=5432 KAFKA_BROKERS=localhost:9094 go run ./core-api/cmd/
 
 test:
-	set -a && source .env && set +a && POSTGRES_HOST=localhost go test ./...
+	set -a && source .env && set +a && POSTGRES_HOST=localhost POSTGRES_PORT=5432 KAFKA_BROKERS=localhost:9094 go test ./...
 
 sys-up:
 	docker compose up -d postgres kafka

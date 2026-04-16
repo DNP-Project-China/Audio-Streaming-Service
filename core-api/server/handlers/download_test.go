@@ -43,7 +43,7 @@ func TestDownload_ReturnsURLAndDownloadsOriginalBytes(t *testing.T) {
 		t.Fatalf("new s3 storage: %v", err)
 	}
 	trackStore := usecases.NewTrackStorage(s3store)
-	h := NewDownloadHandler(queries, trackStore)
+	h := NewDownloadHandler(cfg, queries, trackStore)
 
 	artist := "Download-test"
 	title := fmt.Sprintf("Download song %d", time.Now().UnixNano())
@@ -131,7 +131,7 @@ func TestDownload_InvalidTrackID_Returns400(t *testing.T) {
 	}
 	defer pool.Close()
 
-	h := NewDownloadHandler(repositories.New(pool), usecases.NewTrackStorage(mustS3(t, cfg)))
+	h := NewDownloadHandler(cfg, repositories.New(pool), usecases.NewTrackStorage(mustS3(t, cfg)))
 	req := httptest.NewRequest(http.MethodGet, "/download/not-a-uuid", nil)
 	req = mux.SetURLVars(req, map[string]string{"track_id": "not-a-uuid"})
 	res := httptest.NewRecorder()
@@ -156,7 +156,7 @@ func TestDownload_MissingTrack_Returns404(t *testing.T) {
 	}
 	defer pool.Close()
 
-	h := NewDownloadHandler(repositories.New(pool), usecases.NewTrackStorage(mustS3(t, cfg)))
+	h := NewDownloadHandler(cfg, repositories.New(pool), usecases.NewTrackStorage(mustS3(t, cfg)))
 	missing := "11111111-1111-1111-1111-111111111111"
 	req := httptest.NewRequest(http.MethodGet, "/download/"+missing, nil)
 	req = mux.SetURLVars(req, map[string]string{"track_id": missing})

@@ -13,17 +13,15 @@ import (
 
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/events"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/repositories"
+	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/usecases"
-)
-
-const (
-	maxUploadBytes = 50 << 20 // 50 MiB
 )
 
 type UploadHandler struct {
 	queries *repositories.Queries
 	tracks  *usecases.TrackStorage
 	jobs    events.TranscodePublisher
+	cfg     *server.Config
 }
 
 type TrackUploadResponse struct {
@@ -40,8 +38,8 @@ type ErrorResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
-func NewUploadHandler(queries *repositories.Queries, tracks *usecases.TrackStorage, jobs events.TranscodePublisher) *UploadHandler {
-	return &UploadHandler{queries: queries, tracks: tracks, jobs: jobs}
+func NewUploadHandler(cfg *server.Config, queries *repositories.Queries, tracks *usecases.TrackStorage, jobs events.TranscodePublisher) *UploadHandler {
+	return &UploadHandler{queries: queries, tracks: tracks, jobs: jobs, cfg: cfg}
 }
 
 func (h *UploadHandler) Pattern() string {
@@ -53,9 +51,9 @@ func (h *UploadHandler) Method() string {
 }
 
 func (h *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, h.cfg.UploadMaxBytes)
 
-	if err := r.ParseMultipartForm(maxUploadBytes); err != nil {
+	if err := r.ParseMultipartForm(h.cfg.UploadMaxBytes); err != nil {
 		h.respondError(w, http.StatusRequestEntityTooLarge, "payload_too_large", "file exceeds max size")
 		return
 	}
@@ -115,7 +113,7 @@ func (h *UploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.jobs.PublishCreated(context.Background(), track.ID.String(), track.OriginalObjectKey, 1); err != nil {
+	if err := h.jobs.PublishCreated(context.Background(), track.ID.String(), track.OriginalObjectKey, h.cfg.TranscodeJobPriority); err != nil {
 		_ = h.queries.DeleteTrackByID(context.Background(), track.ID)
 		_ = h.tracks.Delete(context.Background(), stored.Key)
 		h.respondError(w, http.StatusInternalServerError, "internal_error", "failed to enqueue transcode job")

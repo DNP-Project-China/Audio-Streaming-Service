@@ -55,7 +55,7 @@ func TestTracks_OneReadyTrack(t *testing.T) {
 	}
 	tracksUC := usecases.NewTrackStorage(s3store)
 	pub := &spyPublisher{}
-	uploadHandler := NewUploadHandler(queries, tracksUC, pub)
+	uploadHandler := NewUploadHandler(cfg, queries, tracksUC, pub)
 	h := NewTracksHandler(queries)
 
 	fixture, err := os.ReadFile(filepath.Join("testdata", "testfile.mp3"))
@@ -141,7 +141,7 @@ func TestTracks_ThreeReadyTracksNewestFirst(t *testing.T) {
 	}
 	tracksUC := usecases.NewTrackStorage(s3store)
 	pub := &spyPublisher{}
-	uploadHandler := NewUploadHandler(queries, tracksUC, pub)
+	uploadHandler := NewUploadHandler(cfg, queries, tracksUC, pub)
 	h := NewTracksHandler(queries)
 
 	fixture, err := os.ReadFile(filepath.Join("testdata", "testfile.mp3"))

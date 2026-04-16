@@ -48,8 +48,8 @@ func NewTranscodePublisher(lc fx.Lifecycle, cfg *server.Config) *KafkaTranscodeP
 		AllowAutoTopicCreation: true,
 		RequiredAcks:           kafka.RequireOne,
 		Balancer:               &kafka.LeastBytes{},
-		WriteTimeout:           10 * time.Second,
-		ReadTimeout:            10 * time.Second,
+		WriteTimeout:           cfg.KafkaWriteTimeout,
+		ReadTimeout:            cfg.KafkaReadTimeout,
 	}
 
 	lc.Append(fx.Hook{

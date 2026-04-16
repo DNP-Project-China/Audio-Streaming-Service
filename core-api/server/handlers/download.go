@@ -5,20 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/repositories"
+	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/server"
 	"github.com/DNP-Project-China/Audio-Streaming-Service/core-api/usecases"
 	"github.com/gorilla/mux"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const downloadURLEXPIRES = 15 * time.Minute
-
 type DownloadHandler struct {
 	queries *repositories.Queries
 	tracks  *usecases.TrackStorage
+	cfg     *server.Config
 }
 
 type DownloadURLResponse struct {
@@ -27,8 +26,8 @@ type DownloadURLResponse struct {
 	DownloadURL      string `json:"download_url"`
 }
 
-func NewDownloadHandler(queries *repositories.Queries, tracks *usecases.TrackStorage) *DownloadHandler {
-	return &DownloadHandler{queries: queries, tracks: tracks}
+func NewDownloadHandler(cfg *server.Config, queries *repositories.Queries, tracks *usecases.TrackStorage) *DownloadHandler {
+	return &DownloadHandler{queries: queries, tracks: tracks, cfg: cfg}
 }
 
 func (h *DownloadHandler) Pattern() string {
@@ -63,7 +62,7 @@ func (h *DownloadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url, err := h.tracks.PresignDownload(context.Background(), track.OriginalObjectKey, downloadURLEXPIRES)
+	url, err := h.tracks.PresignDownload(context.Background(), track.OriginalObjectKey, h.cfg.DownloadURLExpires)
 	if err != nil {
 		h.respondError(w, http.StatusInternalServerError, "internal_error", "failed to generate download url")
 		return

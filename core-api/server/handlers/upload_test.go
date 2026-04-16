@@ -73,7 +73,7 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 	}
 	trackStore := usecases.NewTrackStorage(s3store)
 	pub := &spyPublisher{}
-	h := NewUploadHandler(queries, trackStore, pub)
+	h := NewUploadHandler(cfg, queries, trackStore, pub)
 
 	fixturePath := filepath.Join("testdata", "testfile.mp3")
 	fixtureBytes, err := os.ReadFile(fixturePath)
@@ -126,8 +126,8 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 	if pub.trackID != out.TrackID {
 		t.Fatalf("publisher trackID mismatch: want=%s got=%s", out.TrackID, pub.trackID)
 	}
-	if pub.priority != 1 {
-		t.Fatalf("expected priority=1, got %d", pub.priority)
+	if pub.priority != cfg.TranscodeJobPriority {
+		t.Fatalf("expected priority=%d, got %d", cfg.TranscodeJobPriority, pub.priority)
 	}
 
 	var trackID pgtype.UUID
@@ -180,7 +180,7 @@ func TestUpload_Returns500WhenPublishFails(t *testing.T) {
 	}
 	trackStore := usecases.NewTrackStorage(s3store)
 	pub := &spyPublisher{err: fmt.Errorf("kafka unavailable")}
-	h := NewUploadHandler(queries, trackStore, pub)
+	h := NewUploadHandler(cfg, queries, trackStore, pub)
 
 	fixturePath := filepath.Join("testdata", "testfile.mp3")
 	fixtureBytes, err := os.ReadFile(fixturePath)
