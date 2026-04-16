@@ -19,6 +19,7 @@ func main() {
 			server.NewConfig,
 			routes.AsRoute(routes.NewHealthHandler),
 			routes.AsRoute(handlers.NewUploadHandler),
+			routes.AsRoute(handlers.NewDownloadHandler),
 			routes.TakesRoutes(server.NewMux),
 			server.NewHTTPServer,
 		),

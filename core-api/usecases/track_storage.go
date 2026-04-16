@@ -134,6 +134,14 @@ func (s *TrackStorage) PresignUpload(ctx context.Context, key string, contentTyp
 	return s.store.PresignPutURL(ctx, key, contentType, expires)
 }
 
+func (s *TrackStorage) PresignDownload(ctx context.Context, key string, expires time.Duration) (string, error) {
+	if err := validateKey(key); err != nil {
+		return "", err
+	}
+
+	return s.store.PresignGetURL(ctx, key, expires)
+}
+
 func (s *TrackStorage) OriginalKey(trackID string, originalFilename string) (string, error) {
 	trackID, err := normalizeSegment(trackID, "track id")
 	if err != nil {
