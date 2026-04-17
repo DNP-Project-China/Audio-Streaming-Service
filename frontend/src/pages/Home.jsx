@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import Hls from 'hls.js';
 import { BsPlayFill, BsDownload, BsFire, BsHeadphones, BsUpload, BsRewind, BsFastForward, BsSearch } from 'react-icons/bs';
 import Top24 from './Top24';
 import UploadModal from './UploadModal';
@@ -17,51 +16,45 @@ export default function Home() {
   const audioRef = useRef(null);
   const pingInterval = useRef(null);
 
-  // ---------- МОКОВЫЕ ДАННЫЕ ДЛЯ ТЕСТИРОВАНИЯ (15 треков для скролла) ----------
-  const mockTracks = [
-    { id: '1', filename: 'Test Track 1 (Mock)' },
-    { id: '2', filename: 'Another Mock Track' },
-    { id: '3', filename: 'Chill Beats' },
-    { id: '4', filename: 'Summer Vibes' },
-    { id: '5', filename: 'Midnight Rain' },
-    { id: '6', filename: 'Electric Dreams' },
-    { id: '7', filename: 'Lost in Space' },
-    { id: '8', filename: 'Neon Lights' },
-    { id: '9', filename: 'Ocean Drive' },
-    { id: '10', filename: 'Retro Wave' },
-    { id: '11', filename: 'Funk Odyssey' },
-    { id: '12', filename: 'Deep House' },
-    { id: '13', filename: 'Jazz Lofi' },
-    { id: '14', filename: 'Rock Classic' },
-    { id: '15', filename: 'Acoustic Session' }
-  ];
-  const mockListeners = {
-    '1': 3, '2': 1, '3': 0, '4': 2, '5': 5, '6': 0,
-    '7': 1, '8': 4, '9': 2, '10': 3, '11': 0, '12': 1,
-    '13': 2, '14': 3, '15': 1
+  // Загрузка треков из реального API
+  const loadTracks = async () => {
+    try {
+      const res = await fetch('/api/tracks');
+      const data = await res.json(); // { items: [...], total }
+      const mapped = data.items.map(track => ({
+        id: track.track_id,
+        filename: `${track.artist} - ${track.title}`,
+        original_filename: track.original_filename,
+        status: track.status
+      }));
+      setTracks(mapped);
+    } catch (err) {
+      console.error('Failed to load tracks', err);
+      setTracks([]);
+    }
+  };
+
+  // Загрузка статистики "слушают сейчас" (заглушка, пока нет analytics)
+  const loadListeners = async () => {
+    try {
+      const res = await fetch('/stats/live');
+      const data = await res.json();
+      setListeners(data);
+    } catch (err) {
+      // Если analytics нет, просто оставляем пустой объект
+      setListeners({});
+    }
   };
 
   useEffect(() => {
-    setTracks(mockTracks);
-    setListeners(mockListeners);
-
-    const mockInterval = setInterval(() => {
-      setListeners(prev => {
-        const newListeners = { ...prev };
-        Object.keys(newListeners).forEach(id => {
-          newListeners[id] = Math.max(0, (newListeners[id] || 0) + Math.floor(Math.random() * 3) - 1);
-        });
-        return newListeners;
-      });
-    }, 5000);
-
-    return () => {
-      clearInterval(mockInterval);
-      if (pingInterval.current) clearInterval(pingInterval.current);
-    };
+    loadTracks();
+    loadListeners();
+    const interval = setInterval(loadListeners, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const sendEvent = (event, trackId) => {
+    // Отправка событий в tracking-сервис (если есть)
     fetch('/tracking/event', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -74,29 +67,26 @@ export default function Home() {
     }).catch(() => {});
   };
 
-  const playTrack = (track) => {
+  // Воспроизведение через прямую ссылку (без HLS)
+  const playTrack = async (track) => {
     if (pingInterval.current) {
       clearInterval(pingInterval.current);
       if (currentTrack) sendEvent('stop', currentTrack.id);
     }
     setCurrentTrack(track);
-    const hlsUrl = `/api/stream/${track.id}/master.m3u8`;
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(audioRef.current);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    try {
+      const res = await fetch(`/api/download/${track.id}`);
+      const data = await res.json();
+      if (data.download_url) {
+        audioRef.current.src = data.download_url;
         audioRef.current.play();
         sendEvent('start', track.id);
         pingInterval.current = setInterval(() => sendEvent('ping', track.id), 10000);
-      });
-    } else if (audioRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      audioRef.current.src = hlsUrl;
-      audioRef.current.addEventListener('canplay', () => {
-        audioRef.current.play();
-        sendEvent('start', track.id);
-        pingInterval.current = setInterval(() => sendEvent('ping', track.id), 10000);
-      });
+      } else {
+        throw new Error('No download URL');
+      }
+    } catch (err) {
+      alert('Cannot play track');
     }
   };
 
@@ -104,7 +94,8 @@ export default function Home() {
     try {
       const res = await fetch(`/api/download/${id}`);
       const data = await res.json();
-      if (data.url) window.open(data.url, '_blank');
+      if (data.download_url) window.open(data.download_url, '_blank');
+      else alert('Download link not available');
     } catch (err) {
       alert('Download link unavailable');
     }
@@ -231,7 +222,11 @@ export default function Home() {
         </div>
       </div>
 
-      <UploadModal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} />
+      <UploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        onUpload={loadTracks}
+      />
 
       <TrackPlayerModal
         isOpen={isPlayerModalOpen}

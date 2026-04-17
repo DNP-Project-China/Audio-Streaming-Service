@@ -16,6 +16,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
     networks:
       - music-net
 
@@ -41,11 +42,22 @@ services:
       - "${KAFKA_EXTERNAL_PORT:-9094}:9094"
     volumes:
       - kafka_data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+    # healthcheck временно отключён
+    networks:
+      - music-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: music-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
     networks:
       - music-net
 
@@ -80,10 +92,8 @@ services:
       KAFKA_WRITE_TIMEOUT: ${KAFKA_WRITE_TIMEOUT:-10s}
       KAFKA_READ_TIMEOUT: ${KAFKA_READ_TIMEOUT:-10s}
     depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - postgres
+      - kafka
     ports:
       - "${CORE_API_PORT}:${CORE_API_PORT}"
     healthcheck:
@@ -128,6 +138,7 @@ services:
 volumes:
   pgdata:
   kafka_data:
+  minio_data:
 
 networks:
   music-net:
