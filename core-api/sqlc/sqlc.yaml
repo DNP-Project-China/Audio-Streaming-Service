@@ -1,0 +1,10 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "query_tracks.sql"
+    schema: "schema_tracks.sql"
+    gen:
+      go:
+        package: "repositories"
+        out: "../repositories"
+        sql_package: "pgx/v5"
