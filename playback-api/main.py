@@ -1,6 +1,8 @@
 import os
 import uuid
 import asyncpg
+import asyncio
+import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from aiokafka import AIOKafkaProducer
@@ -8,15 +10,15 @@ import json
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-# Загружаем переменные из .env файла
 load_dotenv()
 
 producer = None
 db_pool = None
+redis_client = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global producer, db_pool
+    global producer, db_pool, redis_client
     
     kafka_brokers = os.getenv("KAFKA_BROKERS", "localhost:9094")
     producer = AIOKafkaProducer(bootstrap_servers=kafka_brokers)
@@ -31,20 +33,74 @@ async def lifespan(app: FastAPI):
     db_url = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
     
     db_pool = await asyncpg.create_pool(db_url)
+
+    redis_host = os.getenv("REDIS_HOST", "localhost")
+    redis_port = os.getenv("REDIS_PORT", "6379")
+    redis_url = f"redis://{redis_host}:{redis_port}"
+
+    redis_client = redis.from_url(redis_url, decode_responses=True)
+
+    listener_task = asyncio.create_task(listen_expired_sessions())
     
     yield
+
+    listener_task.cancel()
+
+    try:
+        await listener_task
+    except asyncio.CancelledError:
+        pass
     
     if producer:
         await producer.stop()
     if db_pool:
         await db_pool.close()
 
+    await redis_client.close()    
+
+
+async def listen_expired_sessions():
+    await redis_client.config_set('notify-keyspace-events', 'Ex')
+
+    pubsub = redis_client.pubsub()
+    await pubsub.psubscribe('__keyevent@0__:expired')
+
+    try:
+        async for message in pubsub.listen():
+            try:
+                if message['type'] == 'pmessage':
+                    expired_key = message['data']
+
+                    if expired_key.startswith("session:"):
+                        parts = expired_key.split(":")
+
+                        if len(parts) == 3:
+                            _, user_session, track_id = parts
+
+                            event_data = {
+                                "track_id": track_id,
+                                "user_session": user_session,
+                                "status": "stopped_by_timeout"
+                            }
+
+                            kafka_msg = json.dumps(event_data).encode("utf-8")
+                            await producer.send_and_wait("playback-events", kafka_msg)
+
+            except Exception as e:
+                print(f"Error processing item: {e}")
+
+    except asyncio.CancelledError:
+        print("Listener task cancelled.")
+
+    except Exception as e:
+        print(f"Critical Redis Listener error: {e}")
+
+
 app = FastAPI(lifespan=lifespan)
 
 @app.get("/play/{track_id}")
 async def play_track(track_id: uuid.UUID):
     try:
-        # Из пула берем одно готовое соединение
         async with db_pool.acquire() as connection:
             query = "SELECT status, hls_playlist_key FROM tracks WHERE id = $1"
             row = await connection.fetchrow(query, track_id)
@@ -92,6 +148,9 @@ async def ping_event(playload : PlaybackEvent):
     message = json.dumps(event_data).encode("utf-8")
 
     await producer.send_and_wait("playback-events", message)
+
+    session_key = f"session:{playload.user_session}:{playload.track_id}"
+    await redis_client.set(session_key, str(playload.track_id), ex=20)
     
     return {
         "status": "ok"
@@ -108,6 +167,9 @@ async def stop_event(playload : PlaybackEvent):
     message = json.dumps(event_data).encode("utf-8")
 
     await producer.send_and_wait("playback-events", message)
+
+    session_key = f"session:{playload.user_session}:{playload.track_id}"
+    await redis_client.delete(session_key)
     
     return {
         "status": "ok"
