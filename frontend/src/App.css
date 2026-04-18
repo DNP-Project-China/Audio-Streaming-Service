@@ -1,0 +1,621 @@
+/* ---------- Глобальные переменные ---------- */
+:root {
+  --bg-dark: #0a0c12;
+  --bg-card: rgba(18, 25, 45, 0.65);
+  --accent: #00f3ff;
+  --accent-glow: 0 0 10px #00f3ff;
+  --text: #eef5ff;
+  --text-muted: #9ca3af;
+  --border-glow: rgba(0, 243, 255, 0.3);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3);
+  --glass-border: 1px solid rgba(0, 243, 255, 0.2);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: radial-gradient(circle at 10% 20%, #0b1120, #03050b);
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  color: var(--text);
+}
+
+/* ---------- Шапка на всю ширину ---------- */
+.header {
+  background: rgba(10, 15, 25, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-glow);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  width: 100%;
+}
+
+.logo {
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #a0f0ff, #00f3ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 5px rgba(0,243,255,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.logo-subtitle {
+  font-size: 10px;
+  font-weight: normal;
+  background: none;
+  -webkit-background-clip: unset;
+  background-clip: unset;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  opacity: 0.8;
+}
+
+.session-badge {
+  display: none;
+}
+
+/* ---------- Контейнер с отступами по бокам ---------- */
+.home-container {
+  width: 100%;
+  padding: 0 16px;
+  margin: 0;
+  max-width: none;
+}
+
+.two-columns {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.left-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.right-column {
+  flex: 0.8;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+/* Общие стили для карточек */
+.now-playing-card,
+.search-music-block,
+.upload-block,
+.top24-card,
+.listening-now-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  border: var(--glass-border);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+}
+
+/* ---------- Плеер "Now Playing" ---------- */
+.now-playing-card.no-cover {
+  text-align: center;
+}
+
+.track-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 16px 0 20px;
+  color: white;
+  text-shadow: 0 0 8px rgba(0,243,255,0.5);
+  word-break: break-word;
+}
+
+audio {
+  width: 100%;
+  border-radius: 60px;
+  background: rgba(10, 20, 30, 0.8);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 15px rgba(0, 243, 255, 0.3);
+  margin-top: 12px;
+  height: 48px;
+}
+
+audio::-webkit-media-controls-panel {
+  background: linear-gradient(135deg, #0a1428, #07111f);
+  border-radius: 60px;
+  border: 1px solid rgba(0, 243, 255, 0.4);
+}
+
+audio::-webkit-media-controls-play-button {
+  background-color: var(--accent);
+  border-radius: 50%;
+  color: #000;
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+
+audio::-webkit-media-controls-current-time-display,
+audio::-webkit-media-controls-time-remaining-display {
+  color: #c0e0ff;
+  font-weight: 600;
+}
+
+audio::-webkit-media-controls-timeline {
+  background-color: #1e2a3a;
+  border-radius: 10px;
+  height: 4px;
+}
+
+audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress {
+  background-color: var(--accent);
+  border-radius: 10px;
+}
+
+/* ---------- Блок поиска (растягивается по высоте, скролл) ---------- */
+.search-music-block {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.search-music-block h2 {
+  margin-bottom: 16px;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 4px solid var(--accent);
+  padding-left: 16px;
+  flex-shrink: 0;
+}
+
+.search-input-wide {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(0, 243, 255, 0.3);
+  border-radius: 60px;
+  padding: 12px 20px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: 0.2s;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+}
+
+.search-input-wide:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.tracks-list {
+  overflow-y: auto;
+  padding-right: 8px;
+  padding-left: 6px;        /* добавлен левый отступ, чтобы свечение не обрезалось */
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) #1e1e2a;
+  flex: 1;
+  max-height: 300px;
+}
+
+/* ---------- Элемент трека (общий для левого, Top24 и Listening now) ---------- */
+.track-item, .listening-item {
+  background: rgba(10, 15, 25, 0.7);
+  backdrop-filter: blur(8px);
+  border-radius: 20px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  transition: all 0.2s;
+  border: 1px solid rgba(0, 243, 255, 0.1);
+}
+
+.track-item:hover, .listening-item:hover {
+  transform: scale(1.01);       /* вместо translateX, чтобы не вылезать за левый край */
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.2);
+}
+
+.track-name {
+  font-weight: 500;
+  font-size: 14px;
+  flex: 1;
+  color: #f0f3fa;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.track-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.fire-badge {
+  background: rgba(255, 80, 40, 0.2);
+  padding: 4px 10px;
+  border-radius: 40px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #ff9060;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  background: rgba(30, 40, 60, 0.8);
+  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #cdd9ff;
+  transition: all 0.2s;
+  font-size: 18px;
+}
+
+.icon-btn:hover {
+  background: var(--accent);
+  color: #000;
+  box-shadow: 0 0 8px var(--accent);
+  transform: scale(1.05);
+}
+
+/* ---------- Блок Upload по центру ---------- */
+.upload-block {
+  text-align: center;
+}
+
+.upload-block h2 {
+  margin-bottom: 20px;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.upload-center-btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 60px;
+  font-weight: bold;
+  font-size: 16px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: 0.2s;
+}
+
+.upload-center-btn:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 15px var(--accent);
+}
+
+/* ---------- Top24 карточка (фиксированная высота + скролл) ---------- */
+.top24-card {
+  display: flex;
+  flex-direction: column;
+  height: 300px;
+  min-height: 0;
+}
+
+.top24-card h2 {
+  margin-bottom: 20px;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 4px solid var(--accent);
+  padding-left: 16px;
+  flex-shrink: 0;
+}
+
+.top24-list {
+  overflow-y: auto;
+  padding-right: 8px;
+  padding-left: 6px;        /* добавлен левый отступ */
+  scrollbar-width: thin;
+  flex: 1;
+}
+
+/* Стилизация скроллбара для Top24 (такой же, как в Search и Listening now) */
+.top24-list::-webkit-scrollbar {
+  width: 4px;
+}
+.top24-list::-webkit-scrollbar-track {
+  background: #1e1e2a;
+  border-radius: 4px;
+}
+.top24-list::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 4px;
+}
+.top24-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) #1e1e2a;
+}
+
+/* ---------- Блок Listening now (фиксированная высота) ---------- */
+.listening-now-card {
+  display: flex;
+  flex-direction: column;
+  height: 270px;
+}
+
+.listening-now-card h2 {
+  margin-bottom: 16px;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 4px solid var(--accent);
+  padding-left: 16px;
+  flex-shrink: 0;
+}
+
+.listening-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 4px;
+  padding-left: 6px;        /* добавлен левый отступ */
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) #1e1e2a;
+}
+
+/* Стилизация скроллбара для Listening now */
+.listening-list::-webkit-scrollbar {
+  width: 4px;
+}
+.listening-list::-webkit-scrollbar-track {
+  background: #1e1e2a;
+  border-radius: 4px;
+}
+.listening-list::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 4px;
+}
+
+.empty-message {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 20px;
+}
+
+/* ---------- Модальное окно ---------- */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #0f1420;
+  border-radius: 48px;
+  padding: 32px;
+  width: 90%;
+  max-width: 450px;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 30px rgba(0, 243, 255, 0.3);
+  position: relative;
+  text-align: center;
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: 0.2s;
+}
+
+.modal-close:hover {
+  color: var(--accent);
+}
+
+.file-label {
+  background: linear-gradient(135deg, #00c6ff, #0072ff);
+  padding: 12px 24px;
+  border-radius: 60px;
+  font-weight: bold;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0;
+  transition: 0.2s;
+}
+
+.file-label:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 12px #0072ff;
+}
+
+.upload-submit {
+  background: var(--accent);
+  border: none;
+  padding: 12px 24px;
+  border-radius: 60px;
+  font-weight: bold;
+  width: 100%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  transition: 0.2s;
+}
+
+.upload-submit:hover {
+  box-shadow: 0 0 15px var(--accent);
+}
+
+.upload-status {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* ---------- Адаптивность ---------- */
+@media (max-width: 900px) {
+  .two-columns {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .home-container {
+    padding: 0 12px;
+  }
+  .track-title {
+    font-size: 20px;
+  }
+  .top24-list {
+    max-height: 250px;
+  }
+}
+
+/* Специальные стили для модального окна плеера */
+.track-player-modal {
+  max-width: 400px;
+  text-align: center;
+}
+
+.modal-gif {
+  margin: 10px 0 20px;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 0 15px var(--accent);
+}
+
+.modal-track-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: white;
+  text-shadow: 0 0 5px var(--accent);
+  word-break: break-word;
+}
+
+/* Кнопки перемотки */
+.skip-buttons {
+  display: flex;
+  gap: 30px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.skip-btn {
+  background: rgba(20, 30, 50, 0.8);
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--accent);
+  border-radius: 60px;
+  padding: 8px 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.skip-btn span {
+  font-size: 14px;
+  background: rgba(0, 243, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 40px;
+}
+
+.skip-btn:hover {
+  background: var(--accent);
+  color: #000;
+  box-shadow: 0 0 12px var(--accent);
+  transform: scale(1.02);
+}
+
+.skip-btn:hover span {
+  background: rgba(0, 0, 0, 0.2);
+  color: #000;
+}
+
+/* Кастомные контролы в модальном окне плеера */
+.custom-audio-controls {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.play-pause-btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.play-pause-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px var(--accent);
+}
