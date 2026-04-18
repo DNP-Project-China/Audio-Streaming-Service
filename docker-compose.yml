@@ -101,6 +101,40 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+  
+  playback-api:
+    build:
+      context: ./playback-api
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-core}
+      KAFKA_BROKERS: kafka:9092
+      S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
+      REDIS_HOST: redis
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:                            
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+  
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - music-net
 
