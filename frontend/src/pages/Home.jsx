@@ -16,11 +16,10 @@ export default function Home() {
   const audioRef = useRef(null);
   const pingInterval = useRef(null);
 
-  // Загрузка треков из реального API
   const loadTracks = async () => {
     try {
       const res = await fetch('/api/tracks');
-      const data = await res.json(); // { items: [...], total }
+      const data = await res.json();
       const mapped = data.items.map(track => ({
         id: track.track_id,
         filename: `${track.artist} - ${track.title}`,
@@ -34,14 +33,12 @@ export default function Home() {
     }
   };
 
-  // Загрузка статистики "слушают сейчас" (заглушка, пока нет analytics)
   const loadListeners = async () => {
     try {
       const res = await fetch('/stats/live');
       const data = await res.json();
       setListeners(data);
     } catch (err) {
-      // Если analytics нет, просто оставляем пустой объект
       setListeners({});
     }
   };
@@ -53,25 +50,45 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  const sendEvent = (event, trackId) => {
-    // Отправка событий в tracking-сервис (если есть)
-    fetch('/tracking/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event,
-        track_id: trackId,
-        session_id: localStorage.getItem('sessionId'),
-        ts: Date.now()
-      })
-    }).catch(() => {});
+  // --- Трекинг через playback-api ---
+  const startPlayback = async (trackId) => {
+    try {
+      await fetch(`/tracking/play/${trackId}`); // GET запрос (инициирует сессию)
+    } catch (err) {
+      console.error('Failed to start playback tracking', err);
+    }
   };
 
-  // Воспроизведение через прямую ссылку (без HLS)
+  const sendPing = async (trackId) => {
+    try {
+      await fetch('/tracking/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          track_id: trackId,
+          user_session: localStorage.getItem('sessionId')
+        })
+      });
+    } catch (err) {}
+  };
+
+  const sendStop = async (trackId) => {
+    try {
+      await fetch('/tracking/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          track_id: trackId,
+          user_session: localStorage.getItem('sessionId')
+        })
+      });
+    } catch (err) {}
+  };
+
   const playTrack = async (track) => {
     if (pingInterval.current) {
       clearInterval(pingInterval.current);
-      if (currentTrack) sendEvent('stop', currentTrack.id);
+      if (currentTrack) await sendStop(currentTrack.id);
     }
     setCurrentTrack(track);
     try {
@@ -79,9 +96,9 @@ export default function Home() {
       const data = await res.json();
       if (data.download_url) {
         audioRef.current.src = data.download_url;
-        audioRef.current.play();
-        sendEvent('start', track.id);
-        pingInterval.current = setInterval(() => sendEvent('ping', track.id), 10000);
+        await audioRef.current.play();
+        await startPlayback(track.id);
+        pingInterval.current = setInterval(() => sendPing(track.id), 10000);
       } else {
         throw new Error('No download URL');
       }
@@ -107,12 +124,28 @@ export default function Home() {
     }
   };
 
+  // Остановка трекинга при паузе или закрытии
   useEffect(() => {
-    return () => {
+    const handlePause = () => {
       if (currentTrack && pingInterval.current) {
-        sendEvent('stop', currentTrack.id);
+        sendStop(currentTrack.id);
+        clearInterval(pingInterval.current);
+        pingInterval.current = null;
       }
     };
+    const handleBeforeUnload = () => {
+      if (currentTrack) sendStop(currentTrack.id);
+    };
+    const audio = audioRef.current;
+    if (audio) {
+      audio.addEventListener('pause', handlePause);
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => {
+        audio.removeEventListener('pause', handlePause);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        if (currentTrack) sendStop(currentTrack.id);
+      };
+    }
   }, [currentTrack]);
 
   const filteredTracks = tracks.filter(track =>
@@ -132,19 +165,15 @@ export default function Home() {
       className="home-container"
     >
       <div className="two-columns">
-        {/* ЛЕВАЯ КОЛОНКА */}
+        {/* Левая колонка */}
         <div className="left-column">
           <div className="now-playing-card no-cover">
             <h2><BsHeadphones /> Now Playing</h2>
             <div className="track-title">{currentTrack?.filename || '—'}</div>
             <audio ref={audioRef} controls />
             <div className="skip-buttons">
-              <button className="skip-btn" onClick={() => skip(-10)}>
-                <BsRewind /> <span>10</span>
-              </button>
-              <button className="skip-btn" onClick={() => skip(10)}>
-                <BsFastForward /> <span>10</span>
-              </button>
+              <button className="skip-btn" onClick={() => skip(-10)}><BsRewind /><span>10</span></button>
+              <button className="skip-btn" onClick={() => skip(10)}><BsFastForward /><span>10</span></button>
             </div>
           </div>
 
@@ -171,24 +200,8 @@ export default function Home() {
                   <span className="track-name">{track.filename}</span>
                   <div className="track-actions" onClick={(e) => e.stopPropagation()}>
                     <span className="fire-badge"><BsFire /> {listeners[track.id] || 0}</span>
-                    <button
-                      className="icon-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playTrack(track);
-                      }}
-                    >
-                      <BsPlayFill />
-                    </button>
-                    <button
-                      className="icon-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadTrack(track.id);
-                      }}
-                    >
-                      <BsDownload />
-                    </button>
+                    <button className="icon-btn" onClick={() => playTrack(track)}><BsPlayFill /></button>
+                    <button className="icon-btn" onClick={() => downloadTrack(track.id)}><BsDownload /></button>
                   </div>
                 </motion.div>
               ))}
@@ -197,43 +210,19 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ПРАВАЯ КОЛОНКА */}
+        {/* Правая колонка */}
         <div className="right-column">
           <div className="upload-block">
             <h2><BsUpload /> Upload your music</h2>
-            <button className="upload-center-btn" onClick={() => setIsUploadModalOpen(true)}>
-              <BsUpload /> Upload
-            </button>
+            <button className="upload-center-btn" onClick={() => setIsUploadModalOpen(true)}><BsUpload /> Upload</button>
           </div>
-
-          <Top24
-            onPlay={playTrack}
-            onDownload={downloadTrack}
-            onTrackClick={handleTrackClick}
-          />
-
-          <ListeningNow
-            listeners={listeners}
-            tracks={tracks}
-            onPlay={playTrack}
-            onDownload={downloadTrack}
-            onTrackClick={handleTrackClick}
-          />
+          <Top24 onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} />
+          <ListeningNow listeners={listeners} tracks={tracks} onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} />
         </div>
       </div>
 
-      <UploadModal
-        isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        onUpload={loadTracks}
-      />
-
-      <TrackPlayerModal
-        isOpen={isPlayerModalOpen}
-        onClose={() => setIsPlayerModalOpen(false)}
-        track={currentTrack}
-        audioRef={audioRef}
-      />
+      <UploadModal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} onUpload={loadTracks} />
+      <TrackPlayerModal isOpen={isPlayerModalOpen} onClose={() => setIsPlayerModalOpen(false)} track={currentTrack} audioRef={audioRef} />
     </motion.div>
   );
 }
