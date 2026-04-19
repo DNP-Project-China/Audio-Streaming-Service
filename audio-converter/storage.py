@@ -1,5 +1,6 @@
 import os
 import boto3
+from uuid import UUID
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
@@ -31,7 +32,7 @@ class S3Client:
             print(f"Error occurred while downloading {s3_key}: {e}")
             return False
 
-    def upload_hls_folder(self, track_id: int, local_folder: str) -> bool:
+    def upload_hls_folder(self, track_id: UUID, local_folder: str) -> bool:
         try:
             for filename in os.listdir(local_folder):
                 local_filepath = os.path.join(local_folder, filename)

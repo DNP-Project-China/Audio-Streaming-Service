@@ -1,5 +1,6 @@
 import os
 import psycopg2
+from uuid import UUID
 
 
 def get_db_connection():
@@ -12,7 +13,7 @@ def get_db_connection():
     )
 
 
-def get_track_status(track_id: int) -> str:
+def get_track_status(track_id: UUID) -> str:
     status = None
     try:
         conn = get_db_connection()
@@ -31,7 +32,7 @@ def get_track_status(track_id: int) -> str:
     return status
 
 
-def update_track_status(track_id: int, status: str):
+def update_track_status(track_id: UUID, status: str):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
