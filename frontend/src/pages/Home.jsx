@@ -36,7 +36,7 @@ export default function Home() {
 const loadListeners = async () => {
   try {
     const res = await fetch('/stats/live');
-    const data = await res.json(); // { items: [...], total: ... }
+    const data = await res.json();
     const listenersMap = {};
     if (data.items && Array.isArray(data.items)) {
       data.items.forEach(item => {

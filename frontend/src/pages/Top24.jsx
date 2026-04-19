@@ -27,8 +27,10 @@ export default function Top24({ onPlay, onDownload, onTrackClick }) {
     return () => clearInterval(interval);
   }, []);
 
-  // Формируем объект трека для onPlay / onDownload (пока только id)
-  const getTrack = (trackId) => ({ id: trackId, filename: trackId });
+  const getTrack = (track) => ({ 
+    id: track.track_id, 
+    filename: `${track.artist} - ${track.title}` 
+  });
 
   return (
     <div className="top24-card">
@@ -39,13 +41,13 @@ export default function Top24({ onPlay, onDownload, onTrackClick }) {
             key={track.track_id}
             whileHover={{ scale: 1.01 }}
             className="track-item"
-            onClick={() => onTrackClick(getTrack(track.track_id))}
+            onClick={() => onTrackClick(getTrack(track))}
             style={{ cursor: 'pointer' }}
           >
-            <span className="track-name">{idx+1}. {track.track_id.slice(0, 8)}...</span>
+            <span className="track-name">{idx+1}. {track.artist} - {track.title}</span>
             <div className="track-actions" onClick={(e) => e.stopPropagation()}>
               <span className="fire-badge"><BsFire /> {track.total_plays || 0}</span>
-              <button className="icon-btn" onClick={() => onPlay(getTrack(track.track_id))}><BsPlayFill /></button>
+              <button className="icon-btn" onClick={() => onPlay(getTrack(track))}><BsPlayFill /></button>
               <button className="icon-btn" onClick={() => onDownload(track.track_id)}><BsDownload /></button>
             </div>
           </motion.div>
