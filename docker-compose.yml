@@ -143,6 +143,31 @@ services:
     networks:
       - music-net
 
+  statistics-api:
+    build: ./statistics-api
+    container_name: music-statistics
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-core}
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_PLAYBACK_TOPIC: playback-events
+      KAFKA_STATS_GROUP: statistics-api-v1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+    depends_on:
+      - postgres
+      - kafka
+      - redis
+    ports:
+      - "8002:8000"
+    networks:
+      - music-net
+
   frontend:
     build: ./frontend
     container_name: music-frontend
