@@ -5,7 +5,7 @@ import os
 def convert_audio_to_hls(input_file: str, output_dir: str) -> bool:
     os.makedirs(output_dir, exist_ok=True)
 
-    segment_pattern = os.path.join(output_dir, 'segment_%03d.ts')
+    segment_pattern = os.path.join(output_dir, 'segment_%04d.ts')
     playlist_file = os.path.join(output_dir, 'playlist.m3u8')
 
     command = [
