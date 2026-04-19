@@ -187,6 +187,19 @@ async def health():
 async def stats():
     top = await redis_client.zrevrange("plays:counter", 0, TOP_TRACKS_LIMIT-1, withscores=True)
 
+    track_ids = [UUID(track_id) for track_id, _ in top]
+    info_by_id = {}
+    if track_ids:
+        rows = await db_pool.fetch(
+            """
+            SELECT id, title, artist
+            FROM tracks
+            WHERE id = ANY($1::uuid[])
+            """,
+            track_ids,
+        )
+        info_by_id = {str(row["id"]): {"title": row["title"], "artist": row["artist"]} for row in rows}
+
     result = []
     for track_id, plays in top:
         online_key = f"online:track:{track_id}"
@@ -196,6 +209,8 @@ async def stats():
         result.append(
             {
                 "track_id": track_id,
+                "title": info_by_id.get(track_id, {}).get("title"),
+                "artist": info_by_id.get(track_id, {}).get("artist"),
                 "total_plays": int(plays),
                 "online_now": int(online_now),
             }
