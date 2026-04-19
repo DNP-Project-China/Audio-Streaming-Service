@@ -13,6 +13,22 @@ import (
 	"go.uber.org/fx"
 )
 
+func withPermissiveCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "*")
+		w.Header().Set("Access-Control-Expose-Headers", "*")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func NewMux(routes []routes.Route) *mux.Router {
 	r := mux.NewRouter()
 
@@ -30,7 +46,7 @@ func NewMux(routes []routes.Route) *mux.Router {
 func NewHTTPServer(lc fx.Lifecycle, cfg *Config, router *mux.Router) *http.Server {
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
-		Handler:           router,
+		Handler:           withPermissiveCORS(router),
 		ReadHeaderTimeout: cfg.HTTPReadHeaderTimeout,
 		ReadTimeout:       cfg.HTTPReadTimeout,
 		WriteTimeout:      cfg.HTTPWriteTimeout,
