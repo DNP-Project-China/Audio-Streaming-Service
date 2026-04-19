@@ -9,21 +9,34 @@ export default function TrackPlayerModal({ isOpen, onClose, track, audioRef }) {
     if (audioRef.current) {
       const handlePlay = () => setIsPlaying(true);
       const handlePause = () => setIsPlaying(false);
+      const handleError = (e) => console.error('Audio error:', e);
+
       audioRef.current.addEventListener('play', handlePlay);
       audioRef.current.addEventListener('pause', handlePause);
+      audioRef.current.addEventListener('error', handleError);
+
       return () => {
         audioRef.current.removeEventListener('play', handlePlay);
         audioRef.current.removeEventListener('pause', handlePause);
+        audioRef.current.removeEventListener('error', handleError);
       };
     }
   }, [audioRef]);
+
+  // При закрытии модалки останавливаем воспроизведение
+  useEffect(() => {
+    if (!isOpen && audioRef.current) {
+      audioRef.current.pause();
+      // Не очищаем src, чтобы можно было продолжить с того же места при открытии
+    }
+  }, [isOpen, audioRef]);
 
   const togglePlay = () => {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
       } else {
-        audioRef.current.play();
+        audioRef.current.play().catch(err => console.error('Play failed:', err));
       }
     }
   };
@@ -67,7 +80,6 @@ export default function TrackPlayerModal({ isOpen, onClose, track, audioRef }) {
 
             <h3 className="modal-track-title">{track.filename}</h3>
 
-            {/* Кастомные кнопки управления */}
             <div className="custom-audio-controls">
               <button className="skip-btn" onClick={() => skip(-10)}>
                 <BsRewind /> <span>10</span>
@@ -80,7 +92,6 @@ export default function TrackPlayerModal({ isOpen, onClose, track, audioRef }) {
               </button>
             </div>
 
-            {/* Скрытый аудиоэлемент (стандартные контролы убраны) */}
             <audio ref={audioRef} style={{ display: 'none' }} />
           </motion.div>
         </motion.div>

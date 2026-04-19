@@ -1,0 +1,3 @@
+ALTER TABLE tracks
+ADD COLUMN IF NOT EXISTS total_plays BIGINT NOT NULL DEFAULT 0
+CHECK (total_plays >= 0);

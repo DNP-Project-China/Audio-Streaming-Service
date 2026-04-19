@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import Hls from 'hls.js';
 import { BsPlayFill, BsDownload, BsFire, BsHeadphones, BsUpload, BsRewind, BsFastForward, BsSearch } from 'react-icons/bs';
 import Top24 from './Top24';
 import UploadModal from './UploadModal';
@@ -17,86 +16,101 @@ export default function Home() {
   const audioRef = useRef(null);
   const pingInterval = useRef(null);
 
-  // ---------- МОКОВЫЕ ДАННЫЕ ДЛЯ ТЕСТИРОВАНИЯ (15 треков для скролла) ----------
-  const mockTracks = [
-    { id: '1', filename: 'Test Track 1 (Mock)' },
-    { id: '2', filename: 'Another Mock Track' },
-    { id: '3', filename: 'Chill Beats' },
-    { id: '4', filename: 'Summer Vibes' },
-    { id: '5', filename: 'Midnight Rain' },
-    { id: '6', filename: 'Electric Dreams' },
-    { id: '7', filename: 'Lost in Space' },
-    { id: '8', filename: 'Neon Lights' },
-    { id: '9', filename: 'Ocean Drive' },
-    { id: '10', filename: 'Retro Wave' },
-    { id: '11', filename: 'Funk Odyssey' },
-    { id: '12', filename: 'Deep House' },
-    { id: '13', filename: 'Jazz Lofi' },
-    { id: '14', filename: 'Rock Classic' },
-    { id: '15', filename: 'Acoustic Session' }
-  ];
-  const mockListeners = {
-    '1': 3, '2': 1, '3': 0, '4': 2, '5': 5, '6': 0,
-    '7': 1, '8': 4, '9': 2, '10': 3, '11': 0, '12': 1,
-    '13': 2, '14': 3, '15': 1
+  const loadTracks = async () => {
+    try {
+      const res = await fetch('/api/tracks');
+      const data = await res.json();
+      const mapped = data.items.map(track => ({
+        id: track.track_id,
+        filename: `${track.artist} - ${track.title}`,
+        original_filename: track.original_filename,
+        status: track.status
+      }));
+      setTracks(mapped);
+    } catch (err) {
+      console.error('Failed to load tracks', err);
+      setTracks([]);
+    }
   };
+
+const loadListeners = async () => {
+  try {
+    const res = await fetch('/stats/live');
+    const data = await res.json();
+    const listenersMap = {};
+    if (data.items && Array.isArray(data.items)) {
+      data.items.forEach(item => {
+        listenersMap[item.track_id] = item.online_now || 0;
+      });
+    }
+    setListeners(listenersMap);
+  } catch (err) {
+    console.error('Failed to load listeners', err);
+    setListeners({});
+  }
+};
 
   useEffect(() => {
-    setTracks(mockTracks);
-    setListeners(mockListeners);
-
-    const mockInterval = setInterval(() => {
-      setListeners(prev => {
-        const newListeners = { ...prev };
-        Object.keys(newListeners).forEach(id => {
-          newListeners[id] = Math.max(0, (newListeners[id] || 0) + Math.floor(Math.random() * 3) - 1);
-        });
-        return newListeners;
-      });
-    }, 5000);
-
-    return () => {
-      clearInterval(mockInterval);
-      if (pingInterval.current) clearInterval(pingInterval.current);
-    };
+    loadTracks();
+    loadListeners();
+    const interval = setInterval(loadListeners, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  const sendEvent = (event, trackId) => {
-    fetch('/tracking/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event,
-        track_id: trackId,
-        session_id: localStorage.getItem('sessionId'),
-        ts: Date.now()
-      })
-    }).catch(() => {});
+  // --- Трекинг через playback-api ---
+  const startPlayback = async (trackId) => {
+    try {
+      await fetch(`/tracking/play/${trackId}`); // GET запрос (инициирует сессию)
+    } catch (err) {
+      console.error('Failed to start playback tracking', err);
+    }
   };
 
-  const playTrack = (track) => {
+  const sendPing = async (trackId) => {
+    try {
+      await fetch('/tracking/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          track_id: trackId,
+          user_session: localStorage.getItem('sessionId')
+        })
+      });
+    } catch (err) {}
+  };
+
+  const sendStop = async (trackId) => {
+    try {
+      await fetch('/tracking/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          track_id: trackId,
+          user_session: localStorage.getItem('sessionId')
+        })
+      });
+    } catch (err) {}
+  };
+
+  const playTrack = async (track) => {
     if (pingInterval.current) {
       clearInterval(pingInterval.current);
-      if (currentTrack) sendEvent('stop', currentTrack.id);
+      if (currentTrack) await sendStop(currentTrack.id);
     }
     setCurrentTrack(track);
-    const hlsUrl = `/api/stream/${track.id}/master.m3u8`;
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(audioRef.current);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        audioRef.current.play();
-        sendEvent('start', track.id);
-        pingInterval.current = setInterval(() => sendEvent('ping', track.id), 10000);
-      });
-    } else if (audioRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      audioRef.current.src = hlsUrl;
-      audioRef.current.addEventListener('canplay', () => {
-        audioRef.current.play();
-        sendEvent('start', track.id);
-        pingInterval.current = setInterval(() => sendEvent('ping', track.id), 10000);
-      });
+    try {
+      const res = await fetch(`/api/download/${track.id}`);
+      const data = await res.json();
+      if (data.download_url) {
+        audioRef.current.src = data.download_url;
+        await audioRef.current.play();
+        await startPlayback(track.id);
+        pingInterval.current = setInterval(() => sendPing(track.id), 10000);
+      } else {
+        throw new Error('No download URL');
+      }
+    } catch (err) {
+      alert('Cannot play track');
     }
   };
 
@@ -104,7 +118,8 @@ export default function Home() {
     try {
       const res = await fetch(`/api/download/${id}`);
       const data = await res.json();
-      if (data.url) window.open(data.url, '_blank');
+      if (data.download_url) window.open(data.download_url, '_blank');
+      else alert('Download link not available');
     } catch (err) {
       alert('Download link unavailable');
     }
@@ -116,12 +131,28 @@ export default function Home() {
     }
   };
 
+  // Остановка трекинга при паузе или закрытии
   useEffect(() => {
-    return () => {
+    const handlePause = () => {
       if (currentTrack && pingInterval.current) {
-        sendEvent('stop', currentTrack.id);
+        sendStop(currentTrack.id);
+        clearInterval(pingInterval.current);
+        pingInterval.current = null;
       }
     };
+    const handleBeforeUnload = () => {
+      if (currentTrack) sendStop(currentTrack.id);
+    };
+    const audio = audioRef.current;
+    if (audio) {
+      audio.addEventListener('pause', handlePause);
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => {
+        audio.removeEventListener('pause', handlePause);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        if (currentTrack) sendStop(currentTrack.id);
+      };
+    }
   }, [currentTrack]);
 
   const filteredTracks = tracks.filter(track =>
@@ -141,19 +172,15 @@ export default function Home() {
       className="home-container"
     >
       <div className="two-columns">
-        {/* ЛЕВАЯ КОЛОНКА */}
+        {/* Левая колонка */}
         <div className="left-column">
           <div className="now-playing-card no-cover">
             <h2><BsHeadphones /> Now Playing</h2>
             <div className="track-title">{currentTrack?.filename || '—'}</div>
             <audio ref={audioRef} controls />
             <div className="skip-buttons">
-              <button className="skip-btn" onClick={() => skip(-10)}>
-                <BsRewind /> <span>10</span>
-              </button>
-              <button className="skip-btn" onClick={() => skip(10)}>
-                <BsFastForward /> <span>10</span>
-              </button>
+              <button className="skip-btn" onClick={() => skip(-10)}><BsRewind /><span>10</span></button>
+              <button className="skip-btn" onClick={() => skip(10)}><BsFastForward /><span>10</span></button>
             </div>
           </div>
 
@@ -180,24 +207,8 @@ export default function Home() {
                   <span className="track-name">{track.filename}</span>
                   <div className="track-actions" onClick={(e) => e.stopPropagation()}>
                     <span className="fire-badge"><BsFire /> {listeners[track.id] || 0}</span>
-                    <button
-                      className="icon-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playTrack(track);
-                      }}
-                    >
-                      <BsPlayFill />
-                    </button>
-                    <button
-                      className="icon-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadTrack(track.id);
-                      }}
-                    >
-                      <BsDownload />
-                    </button>
+                    <button className="icon-btn" onClick={() => playTrack(track)}><BsPlayFill /></button>
+                    <button className="icon-btn" onClick={() => downloadTrack(track.id)}><BsDownload /></button>
                   </div>
                 </motion.div>
               ))}
@@ -206,39 +217,19 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ПРАВАЯ КОЛОНКА */}
+        {/* Правая колонка */}
         <div className="right-column">
           <div className="upload-block">
             <h2><BsUpload /> Upload your music</h2>
-            <button className="upload-center-btn" onClick={() => setIsUploadModalOpen(true)}>
-              <BsUpload /> Upload
-            </button>
+            <button className="upload-center-btn" onClick={() => setIsUploadModalOpen(true)}><BsUpload /> Upload</button>
           </div>
-
-          <Top24
-            onPlay={playTrack}
-            onDownload={downloadTrack}
-            onTrackClick={handleTrackClick}
-          />
-
-          <ListeningNow
-            listeners={listeners}
-            tracks={tracks}
-            onPlay={playTrack}
-            onDownload={downloadTrack}
-            onTrackClick={handleTrackClick}
-          />
+          <Top24 onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} />
+          <ListeningNow listeners={listeners} tracks={tracks} onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} />
         </div>
       </div>
 
-      <UploadModal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} />
-
-      <TrackPlayerModal
-        isOpen={isPlayerModalOpen}
-        onClose={() => setIsPlayerModalOpen(false)}
-        track={currentTrack}
-        audioRef={audioRef}
-      />
+      <UploadModal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} onUpload={loadTracks} />
+      <TrackPlayerModal isOpen={isPlayerModalOpen} onClose={() => setIsPlayerModalOpen(false)} track={currentTrack} audioRef={audioRef} />
     </motion.div>
   );
 }
