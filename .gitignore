@@ -4,3 +4,4 @@ dist/
 .venv
 notes
 audio_converter/venv
+audio_converter/__pycache__
