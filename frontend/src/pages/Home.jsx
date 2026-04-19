@@ -33,15 +33,22 @@ export default function Home() {
     }
   };
 
-  const loadListeners = async () => {
-    try {
-      const res = await fetch('/stats/live');
-      const data = await res.json();
-      setListeners(data);
-    } catch (err) {
-      setListeners({});
+const loadListeners = async () => {
+  try {
+    const res = await fetch('/stats/live');
+    const data = await res.json(); // { items: [...], total: ... }
+    const listenersMap = {};
+    if (data.items && Array.isArray(data.items)) {
+      data.items.forEach(item => {
+        listenersMap[item.track_id] = item.online_now || 0;
+      });
     }
-  };
+    setListeners(listenersMap);
+  } catch (err) {
+    console.error('Failed to load listeners', err);
+    setListeners({});
+  }
+};
 
   useEffect(() => {
     loadTracks();
