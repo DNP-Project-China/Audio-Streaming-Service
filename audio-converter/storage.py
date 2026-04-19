@@ -6,11 +6,11 @@ from botocore.exceptions import ClientError
 
 class S3Client:
     def __init__(self):
-        self.endpoint_url = os.getenv("S3_ENDPOINT")
-        self.access_key = os.getenv("S3_ACCESS_KEY")
-        self.secret_key = os.getenv("S3_SECRET_KEY")
-        self.region = os.getenv("S3_REGION")
-        self.bucket = os.getenv("S3_BUCKET")
+        self.endpoint_url = os.environ["S3_ENDPOINT"]
+        self.access_key = os.environ["S3_ACCESS_KEY"]
+        self.secret_key = os.environ["S3_SECRET_KEY"]
+        self.region = os.environ["S3_REGION"]
+        self.bucket = os.environ["S3_BUCKET"]
 
         self.client = boto3.client(
             's3',
