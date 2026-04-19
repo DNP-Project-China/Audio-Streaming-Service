@@ -1,5 +1,6 @@
 import os
 import boto3
+from uuid import UUID
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
@@ -18,7 +19,12 @@ class S3Client:
             aws_access_key_id=self.access_key,
             aws_secret_access_key=self.secret_key,
             region_name=self.region,
-            config=Config(signature_version='s3v4')
+            config=Config(
+                signature_version='s3v4',
+                s3={'addressing_style': 'path'},
+                request_checksum_calculation='when_required',
+                response_checksum_validation='when_required',
+            )
         )
 
     def download_file(self, s3_key: str, local_path: str) -> bool:
@@ -31,7 +37,7 @@ class S3Client:
             print(f"Error occurred while downloading {s3_key}: {e}")
             return False
 
-    def upload_hls_folder(self, track_id: int, local_folder: str) -> bool:
+    def upload_hls_folder(self, track_id: UUID, local_folder: str) -> bool:
         try:
             for filename in os.listdir(local_folder):
                 local_filepath = os.path.join(local_folder, filename)
@@ -44,12 +50,13 @@ class S3Client:
                     ".m3u8") else "video/MP2T"
 
                 print(f"Uploading {filename} -> {s3_key}...")
-                self.client.upload_file(
-                    local_filepath,
-                    self.bucket,
-                    s3_key,
-                    ExtraArgs={'ContentType': content_type}
-                )
+                with open(local_filepath, "rb") as file_obj:
+                    self.client.put_object(
+                        Bucket=self.bucket,
+                        Key=s3_key,
+                        Body=file_obj,
+                        ContentType=content_type,
+                    )
 
             print(f"Track {track_id} uploaded successfully to S3!")
             return True

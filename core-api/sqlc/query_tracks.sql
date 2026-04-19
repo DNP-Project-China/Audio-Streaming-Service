@@ -31,7 +31,7 @@ ORDER BY uploaded_at DESC;
 -- name: ListTracksByStatus :many
 SELECT *
 FROM tracks
-WHERE status = $1
+WHERE status = $1::track_status
 ORDER BY uploaded_at DESC;
 
 -- name: ListTracks :many

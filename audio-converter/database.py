@@ -1,5 +1,6 @@
 import os
 import psycopg2
+from uuid import UUID
 
 
 def get_db_connection():
@@ -12,36 +13,31 @@ def get_db_connection():
     )
 
 
-def get_track_status(track_id: int) -> str:
+def get_track_status(track_id: UUID) -> str:
     status = None
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        cur.execute("SELECT status FROM tracks WHERE id = %s", (track_id,))
-        result = cur.fetchone()
-        if result:
-            status = result[0]
-
-        cur.close()
-        conn.close()
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT status FROM tracks WHERE id = %s", (str(track_id),))
+                result = cur.fetchone()
+                if result:
+                    status = result[0]
     except Exception as e:
         print(f"[DB ERROR] {track_id}: {e}")
 
     return status
 
 
-def update_track_status(track_id: int, status: str):
+def update_track_status(track_id: UUID, status: str):
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-
-        cur.execute("UPDATE tracks SET status = %s WHERE id = %s",
-                    (status, track_id))
-        conn.commit()
-
-        cur.close()
-        conn.close()
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE tracks SET status = %s WHERE id = %s",
+                    (status, str(track_id)),
+                )
+            conn.commit()
+            
         print(f"[DB] Track {track_id} changed to '{status}'")
     except Exception as e:
         print(f"[DB ERROR] {track_id}: {e}")

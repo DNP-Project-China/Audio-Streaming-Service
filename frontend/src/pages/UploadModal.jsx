@@ -2,27 +2,40 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BsCloudUpload, BsFileMusic, BsX } from 'react-icons/bs';
 
-export default function UploadModal({ isOpen, onClose }) {
+export default function UploadModal({ isOpen, onClose, onUpload }) {
   const [file, setFile] = useState(null);
+  const [artist, setArtist] = useState('');
+  const [title, setTitle] = useState('');
   const [status, setStatus] = useState('');
 
   const handleFile = (e) => setFile(e.target.files[0]);
 
   const upload = async () => {
     if (!file) { setStatus('Select a file'); return; }
+    if (!artist.trim() || !title.trim()) { setStatus('Artist and Title are required'); return; }
+
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('artist', artist);
+    formData.append('title', title);
     setStatus('Uploading...');
+
     try {
       const res = await fetch('/api/upload', { method: 'POST', body: formData });
       if (res.ok) {
         setStatus('✅ Uploaded! Processing...');
         setFile(null);
+        setArtist('');
+        setTitle('');
         setTimeout(() => {
           onClose();
           setStatus('');
+          if (onUpload) onUpload(); // обновить список треков
         }, 2000);
-      } else setStatus('❌ Upload failed');
+      } else {
+        const err = await res.json();
+        setStatus(`❌ Upload failed: ${err.error || 'unknown'}`);
+      }
     } catch (err) {
       setStatus('❌ API unavailable');
     }
@@ -48,6 +61,25 @@ export default function UploadModal({ isOpen, onClose }) {
             <button className="modal-close" onClick={onClose}><BsX /></button>
             <h2><BsCloudUpload /> Upload Music</h2>
             <p>MP3, FLAC, WAV</p>
+
+            {/* Поля artist и title */}
+            <input
+              type="text"
+              placeholder="Artist"
+              value={artist}
+              onChange={(e) => setArtist(e.target.value)}
+              className="search-input-wide"
+              style={{ marginBottom: 10 }}
+            />
+            <input
+              type="text"
+              placeholder="Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="search-input-wide"
+              style={{ marginBottom: 10 }}
+            />
+
             <label className="file-label">
               <BsFileMusic /> Choose file
               <input type="file" accept=".mp3,.flac,.wav" onChange={handleFile} style={{ display: 'none' }} />

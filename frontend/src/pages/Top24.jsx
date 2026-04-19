@@ -3,58 +3,56 @@ import { motion } from 'framer-motion';
 import { BsPlayFill, BsDownload, BsFire } from 'react-icons/bs';
 
 export default function Top24({ onPlay, onDownload, onTrackClick }) {
-  const [chart, setChart] = useState([]);
-
-  // ---------- МОКОВЫЕ ДАННЫЕ ДЛЯ ТЕСТИРОВАНИЯ (удалить при подключении реального API) ----------
-  const mockChart = [
-    { id: '1', filename: 'Popular Track 1', play_count_24h: 42 },
-    { id: '2', filename: 'Hit Song', play_count_24h: 37 },
-    { id: '3', filename: 'Trendy Beat', play_count_24h: 25 },
-    { id: '4', filename: 'Midnight Vibes', play_count_24h: 18 },
-    { id: '5', filename: 'Neon Dreams', play_count_24h: 12 }
-  ];
+  const [topTracks, setTopTracks] = useState([]);
 
   useEffect(() => {
-    // ВРЕМЕННО: моковые данные
-    setChart(mockChart);
-    // Реальный API закомментирован
-    /*
-    const load = () => {
-      fetch('/stats/chart')
-        .then(res => res.json())
-        .then(setChart)
-        .catch(() => setChart([]));
+    const loadTop = async () => {
+      try {
+        const res = await fetch('/stats/live');
+        const data = await res.json();
+        if (data.items && Array.isArray(data.items)) {
+          // Сортируем по total_plays (убывание) и берём первые 3
+          const sorted = [...data.items].sort((a, b) => b.total_plays - a.total_plays);
+          setTopTracks(sorted.slice(0, 3));
+        } else {
+          setTopTracks([]);
+        }
+      } catch (err) {
+        console.error('Failed to load top tracks', err);
+        setTopTracks([]);
+      }
     };
-    load();
-    const interval = setInterval(load, 30000);
+    loadTop();
+    const interval = setInterval(loadTop, 30000);
     return () => clearInterval(interval);
-    */
   }, []);
 
-  // Берем только первые 3 трека (топ-3 по прослушиваниям, предполагаем, что данные уже отсортированы)
-  const top3 = chart.slice(0, 3);
+  const getTrack = (track) => ({ 
+    id: track.track_id, 
+    filename: `${track.artist} - ${track.title}` 
+  });
 
   return (
     <div className="top24-card">
       <h2><BsFire /> Top 24 hours</h2>
       <div className="top24-list">
-        {top3.map((track, idx) => (
+        {topTracks.map((track, idx) => (
           <motion.div
-            key={track.id}
+            key={track.track_id}
             whileHover={{ scale: 1.01 }}
             className="track-item"
-            onClick={() => onTrackClick(track)}
+            onClick={() => onTrackClick(getTrack(track))}
             style={{ cursor: 'pointer' }}
           >
-            <span className="track-name">{idx+1}. {track.filename}</span>
+            <span className="track-name">{idx+1}. {track.artist} - {track.title}</span>
             <div className="track-actions" onClick={(e) => e.stopPropagation()}>
-              <span className="fire-badge"><BsFire /> {track.play_count_24h || 0}</span>
-              <button className="icon-btn" onClick={() => onPlay(track)}><BsPlayFill /></button>
-              <button className="icon-btn" onClick={() => onDownload(track.id)}><BsDownload /></button>
+              <span className="fire-badge"><BsFire /> {track.total_plays || 0}</span>
+              <button className="icon-btn" onClick={() => onPlay(getTrack(track))}><BsPlayFill /></button>
+              <button className="icon-btn" onClick={() => onDownload(track.track_id)}><BsDownload /></button>
             </div>
           </motion.div>
         ))}
-        {top3.length === 0 && <div className="empty-message">No data for last 24h</div>}
+        {topTracks.length === 0 && <div className="empty-message">No data for last 24h</div>}
       </div>
     </div>
   );
