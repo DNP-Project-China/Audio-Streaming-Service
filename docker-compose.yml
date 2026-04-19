@@ -172,8 +172,9 @@ services:
   audio-converter:
     build: ./audio-converter
     container_name: music-converter
-    restart: unless-stopped
+    restart: always
     environment:
+      PYTHONUNBUFFERED: "1"
       KAFKA_BROKERS: kafka:9092
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432

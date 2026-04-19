@@ -1,9 +1,11 @@
 import os
 import json
 import tempfile
+import time
 from uuid import UUID
 from dotenv import load_dotenv
 from kafka import KafkaConsumer
+from kafka.errors import NoBrokersAvailable
 
 from storage import S3Client
 from converter import convert_audio_to_hls
@@ -11,15 +13,35 @@ from database import get_track_status, update_track_status
 
 load_dotenv()
 
+
+def create_consumer_with_retry(topic: str) -> KafkaConsumer:
+    brokers = os.environ["KAFKA_BROKERS"]
+    retry_delay_seconds = int(os.environ.get("KAFKA_RETRY_DELAY_SECONDS", "5"))
+
+    while True:
+        try:
+            print(f"Connecting to Kafka brokers: {brokers}", flush=True)
+            return KafkaConsumer(
+                topic,
+                bootstrap_servers=brokers,
+                group_id='transcoder-group',
+                value_deserializer=lambda x: json.loads(x.decode('utf-8')),
+                auto_offset_reset='earliest',
+            )
+        except NoBrokersAvailable:
+            print(
+                f"Kafka is not available yet at {brokers}. "
+                f"Retrying in {retry_delay_seconds}s...",
+                flush=True,
+            )
+            time.sleep(retry_delay_seconds)
+
 def main():
+    print("audio-converter: service starting", flush=True)
     s3_client = S3Client()
 
-    consumer = KafkaConsumer(
-        'transcode-jobs',
-        bootstrap_servers=os.environ["KAFKA_BROKERS"],
-        group_id='transcoder-group',
-        value_deserializer=lambda x: json.loads(x.decode('utf-8'))
-    )
+    consumer = create_consumer_with_retry('transcode-jobs')
+    print("audio-converter: waiting for transcode-jobs messages", flush=True)
 
     for message in consumer:
         job = message.value
