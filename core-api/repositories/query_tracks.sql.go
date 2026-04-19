@@ -177,12 +177,12 @@ func (q *Queries) ListTracks(ctx context.Context) ([]Track, error) {
 const listTracksByStatus = `-- name: ListTracksByStatus :many
 SELECT id, artist, title, original_filename, original_object_key, original_size, status, uploaded_at, updated_at, hls_playlist_key
 FROM tracks
-WHERE status = $1
+WHERE status = $1::track_status
 ORDER BY uploaded_at DESC
 `
 
-func (q *Queries) ListTracksByStatus(ctx context.Context, status TrackStatus) ([]Track, error) {
-	rows, err := q.db.Query(ctx, listTracksByStatus, status)
+func (q *Queries) ListTracksByStatus(ctx context.Context, dollar_1 TrackStatus) ([]Track, error) {
+	rows, err := q.db.Query(ctx, listTracksByStatus, dollar_1)
 	if err != nil {
 		return nil, err
 	}
