@@ -10,13 +10,14 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./core-api/sqlc/schema_tracks.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./core-api/sqlc/schema_tracks.sql:/docker-entrypoint-initdb.d/001-schema_tracks.sql:ro
+      - ./core-api/sqlc/002-add-total-plays.sql:/docker-entrypoint-initdb.d/002-add-total-plays.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 30s
     networks:
       - music-net
 
