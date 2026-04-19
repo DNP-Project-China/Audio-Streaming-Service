@@ -37,7 +37,7 @@ def update_track_status(track_id: UUID, status: str):
                     (status, str(track_id)),
                 )
             conn.commit()
-
+            
         print(f"[DB] Track {track_id} changed to '{status}'")
     except Exception as e:
         print(f"[DB ERROR] {track_id}: {e}")
