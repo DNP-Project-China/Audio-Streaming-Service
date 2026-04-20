@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncpg
 import asyncio
+import logging
 import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -11,6 +12,9 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 producer = None
 db_pool = None
@@ -22,7 +26,21 @@ async def lifespan(app: FastAPI):
     
     kafka_brokers = os.getenv("KAFKA_BROKERS", "localhost:9094")
     producer = AIOKafkaProducer(bootstrap_servers=kafka_brokers)
-    await producer.start()
+
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            await producer.start()
+            logger.info("Successfully connected to Kafka")
+            break
+        except Exception as e:
+            logger.warning(f"Failed to connect to Kafka (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt == max_retries - 1:
+                logger.error("Max retries reached. Could not connect to Kafka. Raising exception...")
+                await producer.stop() 
+                raise e
+            logger.info("Retrying Kafka connection in 3 seconds...")
+            await asyncio.sleep(3)
     
     db_user = os.getenv("POSTGRES_USER", "postgres")
     db_pass = os.getenv("POSTGRES_PASSWORD", "postgres")
@@ -87,13 +105,13 @@ async def listen_expired_sessions():
                             await producer.send_and_wait("playback-events", kafka_msg)
 
             except Exception as e:
-                print(f"Error processing item: {e}")
+                logger.error(f"Error processing item: {e}")
 
     except asyncio.CancelledError:
-        print("Listener task cancelled.")
+        logger.info("Listener task cancelled.")
 
     except Exception as e:
-        print(f"Critical Redis Listener error: {e}")
+        logger.critical(f"Critical Redis Listener error: {e}")
 
 
 app = FastAPI(lifespan=lifespan)
