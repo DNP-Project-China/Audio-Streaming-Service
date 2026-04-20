@@ -10,12 +10,14 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./core-api/sqlc/schema_tracks.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./core-api/sqlc/schema_tracks.sql:/docker-entrypoint-initdb.d/001-schema_tracks.sql:ro
+      - ./core-api/sqlc/002-add-total-plays.sql:/docker-entrypoint-initdb.d/002-add-total-plays.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 30s
     networks:
       - music-net
 
@@ -43,9 +45,38 @@ services:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server 127.0.0.1:9092 --list >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 10
+      start_period: 60s
+    networks:
+      - music-net
+
+  minio:
+    image: minio/minio:latest
+    container_name: music-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - music-net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     networks:
       - music-net
 
@@ -80,10 +111,8 @@ services:
       KAFKA_WRITE_TIMEOUT: ${KAFKA_WRITE_TIMEOUT:-10s}
       KAFKA_READ_TIMEOUT: ${KAFKA_READ_TIMEOUT:-10s}
     depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - postgres
+      - kafka
     ports:
       - "${CORE_API_PORT}:${CORE_API_PORT}"
     healthcheck:
@@ -91,10 +120,10 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-  
+    networks:
+      - music-net
   playback-api:
-    build:
-      context: ./playback-api
+    build: ./playback-api
     restart: unless-stopped
     environment:
       POSTGRES_HOST: postgres
@@ -106,25 +135,60 @@ services:
       S3_PUBLIC_BASE_URL: ${S3_PUBLIC_BASE_URL}
       REDIS_HOST: redis
     depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-      redis:                            
-        condition: service_healthy
+      - postgres
+      - kafka
+      - redis
     ports:
       - "8001:8000"
-  
-  redis:
-    image: redis:7-alpine
+    networks:
+      - music-net
+
+  statistics-api:
+    build: ./statistics-api
+    container_name: music-statistics
     restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-core}
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_PLAYBACK_TOPIC: playback-events
+      KAFKA_STATS_GROUP: statistics-api-v1
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+    depends_on:
+      - postgres
+      - kafka
+      - redis
     ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      - "8002:8000"
+    networks:
+      - music-net
+
+  audio-converter:
+    build: ./audio-converter
+    container_name: music-converter
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: "1"
+      KAFKA_BROKERS: kafka:9092
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-core}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION:-ru-1}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+    depends_on:
+      - kafka
+      - minio
+      - postgres
     networks:
       - music-net
 
@@ -162,6 +226,7 @@ services:
 volumes:
   pgdata:
   kafka_data:
+  minio_data:
 
 networks:
   music-net:
