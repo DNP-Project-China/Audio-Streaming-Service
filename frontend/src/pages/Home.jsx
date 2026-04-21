@@ -53,7 +53,12 @@ const loadListeners = async () => {
   useEffect(() => {
     loadTracks();
     loadListeners();
-    const interval = setInterval(loadListeners, 5000);
+
+    const interval = setInterval(() => {
+      loadListeners();
+      loadTracks();
+    }, 5000);
+
     return () => clearInterval(interval);
   }, []);
 
