@@ -69,7 +69,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
               value={artist}
               onChange={(e) => setArtist(e.target.value)}
               className="search-input-wide"
-              style={{ marginBottom: 10 }}
+              style={{ marginTop:30, marginBottom: 15 }}
             />
             <input
               type="text"
