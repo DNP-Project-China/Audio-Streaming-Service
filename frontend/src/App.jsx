@@ -9,7 +9,7 @@ function App() {
   useEffect(() => {
     let id = localStorage.getItem('sessionId');
     if (!id) {
-      id = crypto.randomUUID();
+      id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15);
       localStorage.setItem('sessionId', id);
     }
     setSessionId(id.slice(0, 8) + '...');
