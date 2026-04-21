@@ -6,19 +6,20 @@ export default function TrackPlayerModal({ isOpen, onClose, track, audioRef }) {
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
-    if (audioRef.current) {
+    const audioEl = audioRef.current;
+    if (audioEl) {
       const handlePlay = () => setIsPlaying(true);
       const handlePause = () => setIsPlaying(false);
       const handleError = (e) => console.error('Audio error:', e);
 
-      audioRef.current.addEventListener('play', handlePlay);
-      audioRef.current.addEventListener('pause', handlePause);
-      audioRef.current.addEventListener('error', handleError);
+      audioEl.addEventListener('play', handlePlay);
+      audioEl.addEventListener('pause', handlePause);
+      audioEl.addEventListener('error', handleError);
 
       return () => {
-        audioRef.current.removeEventListener('play', handlePlay);
-        audioRef.current.removeEventListener('pause', handlePause);
-        audioRef.current.removeEventListener('error', handleError);
+        audioEl.removeEventListener('play', handlePlay);
+        audioEl.removeEventListener('pause', handlePause);
+        audioEl.removeEventListener('error', handleError);
       };
     }
   }, [audioRef]);
