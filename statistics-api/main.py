@@ -26,44 +26,46 @@ UPDATE_TIME_RATE = 20
 TOP_TRACKS_LIMIT = 10
 FLUSH_INTERVAL_SECONDS = 60
 
+# Validation (converter) of event from kafka 
 class PlaybackEvent(BaseModel):
     track_id: UUID
     user_session: Optional[str] = None
     status: Literal["started", "playing", "stopped", "stopped_by_timeout"]
     ts: datetime
 
-
+# Adding a timestamp for Redis sorted set
 def now_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-
+# Main logic recording the events into Redis
 async def process_event(event: PlaybackEvent) -> None:
+    # Take the track ID and create a key for the sorted set
     track_id = str(event.track_id)
     key = f"online:track:{track_id}"
-    time_priority = int(time.time())
-
+    # In user pins the track (start playing) we add the session to the sorted set with the timestamp, and remove old sessions that are out of the UPDATE_TIME_RATE window
     if event.status == "playing":
         if not event.user_session:
             return
-        await redis_client.zadd(key, {event.user_session: time_priority})
-        await redis_client.zremrangebyscore(key, "-inf", time_priority - UPDATE_TIME_RATE)
-
+        await redis_client.zadd(key, {event.user_session: event.ts.timestamp()})
+        await redis_client.zremrangebyscore(key, "-inf", event.ts.timestamp() - UPDATE_TIME_RATE)
+    # If the user stopped the track, we remove the session from the sorted set
     elif event.status in ("stopped", "stopped_by_timeout"):
         if not event.user_session:
             return
         await redis_client.zrem(key, event.user_session)
-
+    # If the track is started, we increment the play count in the sorted set and also create temporary recording for delta counting, which will be flushed to the database periodically
     elif event.status == "started":
         await redis_client.zincrby("plays:counter", 1, track_id)
         await redis_client.hincrby("plays:delta", track_id, 1)
 
-
+# Kafka consumer loop, which will consume events and process them, with error handling and reconnection logic
 async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_group: str) -> None:
     while True:
         local_consumer = None
         started = False
         global consumer_ready
         try:
+            # We create a new consumer on each iteration, so if there is an error, we will try to reconnect after a delay
             local_consumer = AIOKafkaConsumer(
                 kafka_topic,
                 bootstrap_servers=kafka_brokers,
@@ -75,21 +77,23 @@ async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_gr
             started = True
             consumer_ready = True
             print("statistics-api: kafka consumer started", flush=True)
-
+            # Message processing loop
             async for msg in local_consumer:
                 try:
                     payload = json.loads(msg.value.decode("utf-8"))
+                    # Adding a timestamp if it's not provided in the event, so we can use it in future
                     if "ts" not in payload:
                         payload["ts"] = now_utc_iso()
                     event = PlaybackEvent(**payload)
                     await process_event(event)
                     if event.status == "started":
                         print(f"statistics-api: play started for {event.track_id}", flush=True)
+                # Error handling for message processing
                 except (json.JSONDecodeError, ValidationError) as exc:
                     print(f"statistics-api: bad event skipped: {exc}", flush=True)
                 except Exception as exc:
                     print(f"statistics-api: event processing error: {exc}", flush=True)
-
+        # Error handling for consumer connection and loop
         except asyncio.CancelledError:
             consumer_ready = False
             break
@@ -104,7 +108,7 @@ async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_gr
                     consumer_ready = False
                 except Exception as exc:
                     print(f"statistics-api: consumer stop error: {exc}", flush=True)
-
+# One-minute job for updating total_pays collums in database
 async def flush_plays_once() -> None:
     data = await redis_client.hgetall("plays:delta")
     if not data:
@@ -112,7 +116,7 @@ async def flush_plays_once() -> None:
         return
     
     print(f"flush: processing {len(data)} tracks", flush=True)
-    
+    # uopdating database
     async with db_pool.acquire() as conn:
         async with conn.transaction():
             for track_id, cnt_str in data.items():
@@ -127,33 +131,34 @@ async def flush_plays_once() -> None:
                     track_id,
                     cnt,
                 )
-
+    # Elliminate Redis delta collection after flushing to the database, to avoid overcounting
     await redis_client.delete("plays:delta")
     print("flush: plays:delta cleared", flush=True)
-
-async def flush_plays_loop() -> None:
+# Flush loop that runs flush_plays_once every FLUSH_INTERVAL_SECONDS seconds
     print("flush: loop started", flush=True)
     while True:
         try:
             await asyncio.sleep(FLUSH_INTERVAL_SECONDS)
             print("flush: tick", flush=True)
             await flush_plays_once()
+        # Error handling for flush loop
         except asyncio.CancelledError:
             break
         except Exception as exc:
             print(f"flush error: {exc}", flush=True)
 
-
+# Lifespan function for FastAPI
+# Initialize the database pool, Redis client, and start the consumer and flush tasks on startup, and clean up on shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_pool, redis_client, consumer_task, flush_task
-
+    # Redis connection 
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = os.getenv("REDIS_PORT", "6379")
     redis_db = os.getenv("REDIS_DB", "0")
     redis_url = f"redis://{redis_host}:{redis_port}/{redis_db}"
     redis_client = redis.from_url(redis_url, decode_responses=True)
-
+    # Database connection pool
     db_user = os.getenv("POSTGRES_USER", "postgres")
     db_pass = os.getenv("POSTGRES_PASSWORD", "postgres")
     db_host = os.getenv("POSTGRES_HOST", "localhost")
@@ -161,17 +166,19 @@ async def lifespan(app: FastAPI):
     db_name = os.getenv("POSTGRES_DB", "core")
     db_url = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
     db_pool = await asyncpg.create_pool(db_url)
-
+    # Kafka consumer connection parameters
     kafka_brokers = os.getenv("KAFKA_BROKERS", "localhost:9094")
     kafka_topic = os.getenv("KAFKA_PLAYBACK_TOPIC", "playback-events")
     kafka_group = os.getenv("KAFKA_STATS_GROUP", "statistics-api-v1")
-
+    # Starting the consumer and flush tasks
     consumer_task = asyncio.create_task(consume_playback_events(kafka_brokers, kafka_topic, kafka_group))
     flush_task = asyncio.create_task(flush_plays_loop())
     print("statistics-api: consumer and flush tasks started", flush=True)
-
+    # Separation of code for 2 parts:
+    # Frist executes when the application starts
+    # Second executes when the application is shutting down
     yield
-
+    # Сlean up on shutdown: cancel tasks and close connections
     if consumer_task:
         consumer_task.cancel()
         try:
@@ -233,7 +240,7 @@ async def stats():
         )
         # forming a dicktionary
         info_by_id = {str(row["id"]): {"title": row["title"], "artist": row["artist"]} for row in rows}
-
+    # Forming the result with online listeners count for each track
     result = []
     for track_id, plays in top:
         online_key = f"online:track:{track_id}"
@@ -249,5 +256,5 @@ async def stats():
                 "online_now": int(online_now),
             }
         )
-
+    # Returning the result
     return {"items": result, "total": len(result)}
