@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { BsPlayFill, BsPauseFill, BsDownload, BsFire, BsHeadphones, BsUpload, BsRewind, BsFastForward, BsSearch, BsActivity, BsVolumeUpFill } from 'react-icons/bs';
+import Hls from 'hls.js';
 import Top24 from './Top24';
 import UploadModal from './UploadModal';
 import ListeningNow from './ListeningNow';
@@ -19,6 +20,7 @@ export default function Home() {
   const [volume, setVolume] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
+  const hlsRef = useRef(null);
   const pingInterval = useRef(null);
 
   const loadTracks = async () => {
@@ -113,19 +115,36 @@ const loadStats = async () => {
       clearInterval(pingInterval.current);
       if (currentTrack) await sendStop(currentTrack.id);
     }
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
     setCurrentTrack(track);
     try {
       const res = await fetch(`/api/download/${track.id}`);
       const data = await res.json();
       if (data.download_url) {
-        audioRef.current.src = data.download_url;
-        await audioRef.current.play();
-        await startPlayback(track.id);
-        pingInterval.current = setInterval(() => sendPing(track.id), 10000);
+        if (Hls.isSupported() && data.download_url.includes('.m3u8')) {
+          const hls = new Hls();
+          hlsRef.current = hls;
+          hls.loadSource(data.download_url);
+          hls.attachMedia(audioRef.current);
+          hls.on(Hls.Events.MANIFEST_PARSED, async () => {
+            await audioRef.current.play();
+            await startPlayback(track.id);
+            pingInterval.current = setInterval(() => sendPing(track.id), 10000);
+          });
+        } else {
+          audioRef.current.src = data.download_url;
+          await audioRef.current.play();
+          await startPlayback(track.id);
+          pingInterval.current = setInterval(() => sendPing(track.id), 10000);
+        }
       } else {
         throw new Error('No download URL');
       }
     } catch (err) {
+      console.error(err);
       alert('Cannot play track');
     }
   };
