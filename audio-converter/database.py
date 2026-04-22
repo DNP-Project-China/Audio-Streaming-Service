@@ -41,3 +41,18 @@ def update_track_status(track_id: UUID, status: str):
         print(f"[DB] Track {track_id} changed to '{status}'")
     except Exception as e:
         print(f"[DB ERROR] {track_id}: {e}")
+
+
+def update_track_ready(track_id: UUID, hls_playlist_key: str):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE tracks SET status = 'ready', hls_playlist_key = %s WHERE id = %s",
+                    (hls_playlist_key, str(track_id)),
+                )
+            conn.commit()
+            
+        print(f"[DB] Track {track_id} changed to 'ready' with key {hls_playlist_key}")
+    except Exception as e:
+        print(f"[DB ERROR] {track_id}: {e}")
