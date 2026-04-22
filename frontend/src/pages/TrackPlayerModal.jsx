@@ -1,50 +1,22 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { BsX, BsPlayFill, BsPauseFill, BsRewind, BsFastForward } from 'react-icons/bs';
-import { useState, useEffect } from 'react';
 
-export default function TrackPlayerModal({ isOpen, onClose, track, audioRef }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  useEffect(() => {
-    if (audioRef.current) {
-      const handlePlay = () => setIsPlaying(true);
-      const handlePause = () => setIsPlaying(false);
-      const handleError = (e) => console.error('Audio error:', e);
-
-      audioRef.current.addEventListener('play', handlePlay);
-      audioRef.current.addEventListener('pause', handlePause);
-      audioRef.current.addEventListener('error', handleError);
-
-      return () => {
-        audioRef.current.removeEventListener('play', handlePlay);
-        audioRef.current.removeEventListener('pause', handlePause);
-        audioRef.current.removeEventListener('error', handleError);
-      };
-    }
-  }, [audioRef]);
-
-  // При закрытии модалки останавливаем воспроизведение
-  useEffect(() => {
-    if (!isOpen && audioRef.current) {
-      audioRef.current.pause();
-      // Не очищаем src, чтобы можно было продолжить с того же места при открытии
-    }
-  }, [isOpen, audioRef]);
-
-  const togglePlay = () => {
-    if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play().catch(err => console.error('Play failed:', err));
-      }
-    }
-  };
-
-  const skip = (seconds) => {
-    if (audioRef.current) {
-      audioRef.current.currentTime += seconds;
-    }
+export default function TrackPlayerModal({ 
+  isOpen, 
+  onClose, 
+  track, 
+  currentTime, 
+  duration, 
+  isPlaying, 
+  onSeek, 
+  onTogglePlay, 
+  onSkip 
+}) {
+  const formatTime = (time) => {
+    if (isNaN(time) || time === Infinity) return '0:00';
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
   if (!track) return null;
@@ -80,19 +52,33 @@ export default function TrackPlayerModal({ isOpen, onClose, track, audioRef }) {
 
             <h3 className="modal-track-title">{track.filename}</h3>
 
-            <div className="custom-audio-controls">
-              <button className="skip-btn" onClick={() => skip(-10)}>
+            <div className="track-progress-container" style={{ width: '100%', marginBottom: '20px', padding: '0', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#8b9bb4', marginBottom: '8px' }}>
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={isFinite(duration) ? duration : 0}
+                step="0.01"
+                value={currentTime}
+                onChange={onSeek}
+                style={{ width: '100%', cursor: 'pointer', accentColor: '#00f3ff' }}
+              />
+            </div>
+
+            <div className="custom-audio-controls" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
+              <button className="skip-btn" onClick={() => onSkip(-10)}>
                 <BsRewind /> <span>10</span>
               </button>
-              <button className="play-pause-btn" onClick={togglePlay}>
+              <button className="play-pause-btn" onClick={onTogglePlay} style={{ background: '#00f3ff', color: 'black', border: 'none', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', cursor: 'pointer', boxShadow: '0 0 10px #00f3ff' }}>
                 {isPlaying ? <BsPauseFill /> : <BsPlayFill />}
               </button>
-              <button className="skip-btn" onClick={() => skip(10)}>
+              <button className="skip-btn" onClick={() => onSkip(10)}>
                 <BsFastForward /> <span>10</span>
               </button>
             </div>
-
-            <audio ref={audioRef} style={{ display: 'none' }} />
           </motion.div>
         </motion.div>
       )}

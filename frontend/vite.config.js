@@ -5,9 +5,26 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://mock-api:8080',
-      '/tracking': 'http://mock-tracking:8081',
-      '/stats': 'http://mock-analytics:8082'
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/tracking': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/tracking/, '')
+      },
+      '/stats/live': {
+        target: 'http://localhost:8002',
+        changeOrigin: true,
+        rewrite: () => '/stats'
+      },
+      '/stats': {
+        target: 'http://localhost:8002',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/stats/, '')
+      }
     }
   }
 })

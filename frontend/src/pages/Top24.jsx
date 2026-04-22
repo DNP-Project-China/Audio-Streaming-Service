@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BsPlayFill, BsDownload, BsFire } from 'react-icons/bs';
+import { BsPlayFill, BsPauseFill, BsDownload, BsFire } from 'react-icons/bs';
 
-export default function Top24({ onPlay, onDownload, onTrackClick }) {
+export default function Top24({ onPlay, onDownload, onTrackClick, currentTrack, isPlaying, onTogglePlay }) {
   const [topTracks, setTopTracks] = useState([]);
 
   useEffect(() => {
@@ -47,7 +47,12 @@ export default function Top24({ onPlay, onDownload, onTrackClick }) {
             <span className="track-name">{idx+1}. {track.artist} - {track.title}</span>
             <div className="track-actions" onClick={(e) => e.stopPropagation()}>
               <span className="fire-badge"><BsFire /> {track.total_plays || 0}</span>
-              <button className="icon-btn" onClick={() => onPlay(getTrack(track))}><BsPlayFill /></button>
+              <button
+                className="icon-btn"
+                onClick={() => (currentTrack && currentTrack.id === track.track_id) ? onTogglePlay() : onPlay(getTrack(track))}
+              >
+                {currentTrack && currentTrack.id === track.track_id && isPlaying ? <BsPauseFill /> : <BsPlayFill />}
+              </button>
               <button className="icon-btn" onClick={() => onDownload(track.track_id)}><BsDownload /></button>
             </div>
           </motion.div>

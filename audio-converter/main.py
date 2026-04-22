@@ -9,7 +9,7 @@ from kafka.errors import NoBrokersAvailable
 
 from storage import S3Client
 from converter import convert_audio_to_hls
-from database import get_track_status, update_track_status
+from database import get_track_status, update_track_status, update_track_ready
 
 load_dotenv()
 
@@ -78,7 +78,8 @@ def main():
                 print(f"[FAILED] {job_id}: Failed to upload HLS files")
                 continue
 
-        update_track_status(track_id, 'ready')
+        hls_playlist_key = f"hls/{track_id}/master.m3u8" 
+        update_track_ready(track_id, hls_playlist_key)
         print(f"[SUCCESS] {job_id}: Task completed successfully ---\n")
 
 if __name__ == "__main__":
