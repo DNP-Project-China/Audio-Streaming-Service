@@ -127,8 +127,8 @@ async def play_track(track_id: uuid.UUID):
             raise HTTPException(status_code=404, detail="Track not found")
 
         if row['status'] == "ready":
-            base_url = os.getenv("S3_PUBLIC_BASE_URL", "https://s3.example.com/bucket/")
-            playlist_url = f"{base_url}{row['hls_playlist_key']}"
+            base_url = os.getenv("S3_PUBLIC_BASE_URL", "https://s3.example.com/bucket")
+            playlist_url = f"{base_url}/{row['hls_playlist_key']}"
 
             event_data = {
                 "track_id": str(track_id),
