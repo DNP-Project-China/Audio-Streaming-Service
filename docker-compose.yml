@@ -133,6 +133,7 @@ services:
     build: ./statistics-api
     container_name: music-statistics
     restart: unless-stopped
+    command: sh -c "./start.sh"
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -150,7 +151,12 @@ services:
       - kafka
       - redis
     ports:
-      - "8002:8000"
+      - "${STATISTICS_PORT:-8002}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl", "-f", "http://127.0.0.1:8000/health || exit 1"]
+      interval: 10s
+      timeout: 30s
+      retries: 5
     networks:
       - music-net
 

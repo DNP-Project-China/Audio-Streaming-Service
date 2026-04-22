@@ -21,6 +21,7 @@ db_pool = None
 redis_client = None
 consumer_task = None
 flush_task = None
+consumer_ready = False
 UPDATE_TIME_RATE = 20
 TOP_TRACKS_LIMIT = 10
 FLUSH_INTERVAL_SECONDS = 60
@@ -61,6 +62,7 @@ async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_gr
     while True:
         local_consumer = None
         started = False
+        global consumer_ready
         try:
             local_consumer = AIOKafkaConsumer(
                 kafka_topic,
@@ -71,6 +73,7 @@ async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_gr
             )
             await local_consumer.start()
             started = True
+            consumer_ready = True
             print("statistics-api: kafka consumer started", flush=True)
 
             async for msg in local_consumer:
@@ -88,14 +91,17 @@ async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_gr
                     print(f"statistics-api: event processing error: {exc}", flush=True)
 
         except asyncio.CancelledError:
+            consumer_ready = False
             break
         except Exception as exc:
             print(f"statistics-api: consumer error: {exc}", flush=True)
+            consumer_ready = False
             await asyncio.sleep(3)
         finally:
             if local_consumer and started:
                 try:
                     await local_consumer.stop()
+                    consumer_ready = False
                 except Exception as exc:
                     print(f"statistics-api: consumer stop error: {exc}", flush=True)
 
@@ -188,24 +194,32 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-
+# endpoint for dependences health check and therefore container health check, used by docker-compose
 @app.get("/health")
 async def health():
     try:
-        availiable = await redis_client.ping()
-        if not availiable:
+        # Redis ping
+        if not await redis_client.ping():
             raise RuntimeError("redis not available")
+
+        # DB check (use context manager so connection is released)
         async with db_pool.acquire() as conn:
             await conn.fetchval("SELECT 1")
+
+        # Consumer should be ready (connected to Kafka)
+        if not consumer_ready:
+            raise RuntimeError("kafka consumer not ready")
+
         return {"status": "ok"}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-
+# main endpoint to get top tracks with their play counts and online listeners
 @app.get("/stats")
 async def stats():
+    # Get top tracks by play count from Redis sorted set
     top = await redis_client.zrevrange("plays:counter", 0, TOP_TRACKS_LIMIT-1, withscores=True)
-
+    # Fetch track info from PostgreSQL for the top tracks
     track_ids = [UUID(track_id) for track_id, _ in top]
     info_by_id = {}
     if track_ids:
@@ -217,6 +231,7 @@ async def stats():
             """,
             track_ids,
         )
+        # forming a dicktionary
         info_by_id = {str(row["id"]): {"title": row["title"], "artist": row["artist"]} for row in rows}
 
     result = []
