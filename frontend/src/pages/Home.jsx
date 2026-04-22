@@ -366,8 +366,24 @@ const loadStats = async () => {
             <h2><BsUpload /> Upload your music</h2>
             <button className="upload-center-btn" onClick={() => setIsUploadModalOpen(true)}><BsUpload /> Upload</button>
           </div>
-          <Top24 onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} />
-          <ListeningNow listeners={listeners} tracks={tracks} onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} />
+          <Top24
+            onPlay={playTrack}
+            onDownload={downloadTrack}
+            onTrackClick={handleTrackClick}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+          />
+          <ListeningNow
+            listeners={listeners}
+            tracks={tracks}
+            onPlay={playTrack}
+            onDownload={downloadTrack}
+            onTrackClick={handleTrackClick}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+          />
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
-import { BsPlayFill, BsDownload, BsActivity } from 'react-icons/bs';
+import { BsPlayFill, BsPauseFill, BsDownload, BsActivity } from 'react-icons/bs';
 
-export default function ListeningNow({ listeners, tracks, onPlay, onDownload, onTrackClick }) {
+export default function ListeningNow({ listeners, tracks, onPlay, onDownload, onTrackClick, currentTrack, isPlaying, onTogglePlay }) {
   // Фильтруем треки, у которых есть хотя бы один слушатель
   const activeTracks = tracks.filter(track => (listeners[track.id] || 0) > 0);
 
@@ -25,9 +25,9 @@ export default function ListeningNow({ listeners, tracks, onPlay, onDownload, on
                 </span>
                 <button
                   className="icon-btn"
-                  onClick={() => onPlay(track)}
+                  onClick={() => (currentTrack && currentTrack.id === track.id) ? onTogglePlay() : onPlay(track)}
                 >
-                  <BsPlayFill />
+                  {currentTrack && currentTrack.id === track.id && isPlaying ? <BsPauseFill /> : <BsPlayFill />}
                 </button>
                 <button
                   className="icon-btn"

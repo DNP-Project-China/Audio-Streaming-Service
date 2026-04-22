@@ -19,7 +19,6 @@ load_dotenv()
 
 db_pool = None
 redis_client = None
-consumer = None
 consumer_task = None
 flush_task = None
 UPDATE_TIME_RATE = 20
@@ -58,13 +57,23 @@ async def process_event(event: PlaybackEvent) -> None:
         await redis_client.hincrby("plays:delta", track_id, 1)
 
 
-async def consume_playback_events() -> None:
+async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_group: str) -> None:
     while True:
+        local_consumer = None
+        started = False
         try:
-            await consumer.start()
+            local_consumer = AIOKafkaConsumer(
+                kafka_topic,
+                bootstrap_servers=kafka_brokers,
+                group_id=kafka_group,
+                enable_auto_commit=True,
+                auto_offset_reset="latest",
+            )
+            await local_consumer.start()
+            started = True
             print("statistics-api: kafka consumer started", flush=True)
 
-            async for msg in consumer:
+            async for msg in local_consumer:
                 try:
                     payload = json.loads(msg.value.decode("utf-8"))
                     if "ts" not in payload:
@@ -84,10 +93,11 @@ async def consume_playback_events() -> None:
             print(f"statistics-api: consumer error: {exc}", flush=True)
             await asyncio.sleep(3)
         finally:
-            try:
-                await consumer.stop()
-            except Exception:
-                pass
+            if local_consumer and started:
+                try:
+                    await local_consumer.stop()
+                except Exception as exc:
+                    print(f"statistics-api: consumer stop error: {exc}", flush=True)
 
 async def flush_plays_once() -> None:
     data = await redis_client.hgetall("plays:delta")
@@ -130,7 +140,7 @@ async def flush_plays_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global db_pool, redis_client, consumer, consumer_task, flush_task
+    global db_pool, redis_client, consumer_task, flush_task
 
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = os.getenv("REDIS_PORT", "6379")
@@ -150,14 +160,7 @@ async def lifespan(app: FastAPI):
     kafka_topic = os.getenv("KAFKA_PLAYBACK_TOPIC", "playback-events")
     kafka_group = os.getenv("KAFKA_STATS_GROUP", "statistics-api-v1")
 
-    consumer = AIOKafkaConsumer(
-        kafka_topic,
-        bootstrap_servers=kafka_brokers,
-        group_id=kafka_group,
-        enable_auto_commit=True,
-        auto_offset_reset="latest",
-    )
-    consumer_task = asyncio.create_task(consume_playback_events())
+    consumer_task = asyncio.create_task(consume_playback_events(kafka_brokers, kafka_topic, kafka_group))
     flush_task = asyncio.create_task(flush_plays_loop())
     print("statistics-api: consumer and flush tasks started", flush=True)
 

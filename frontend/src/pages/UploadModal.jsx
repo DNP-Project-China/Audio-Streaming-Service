@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BsCloudUpload, BsFileMusic, BsX } from 'react-icons/bs';
 
+const UPLOAD_TIMEOUT_MS = 300000;
+
 export default function UploadModal({ isOpen, onClose, onUpload }) {
   const [file, setFile] = useState(null);
   const [artist, setArtist] = useState('');
@@ -20,8 +22,15 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
     formData.append('title', title);
     setStatus('Uploading...');
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
       if (res.ok) {
         setStatus('✅ Uploaded! Processing...');
         setFile(null);
@@ -37,7 +46,13 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
         setStatus(`❌ Upload failed: ${err.error || 'unknown'}`);
       }
     } catch (err) {
-      setStatus('❌ API unavailable');
+      if (err.name === 'AbortError') {
+        setStatus('❌ Upload timeout. Try again (large files may take longer).');
+      } else {
+        setStatus('❌ API unavailable');
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 
