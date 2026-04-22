@@ -115,37 +115,44 @@ const loadStats = async () => {
       clearInterval(pingInterval.current);
       if (currentTrack) await sendStop(currentTrack.id);
     }
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
     setCurrentTrack(track);
     try {
-      const res = await fetch(`/api/download/${track.id}`);
+      const res = await fetch(`/tracking/play/${track.id}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to start playback');
+      }
+      
       const data = await res.json();
-      if (data.download_url) {
-        if (Hls.isSupported() && data.download_url.includes('.m3u8')) {
+      
+      if (data.playlist_url) {
+        if (Hls.isSupported()) {
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+          }
           const hls = new Hls();
           hlsRef.current = hls;
-          hls.loadSource(data.download_url);
+          hls.loadSource(data.playlist_url);
           hls.attachMedia(audioRef.current);
-          hls.on(Hls.Events.MANIFEST_PARSED, async () => {
-            await audioRef.current.play();
-            await startPlayback(track.id);
-            pingInterval.current = setInterval(() => sendPing(track.id), 10000);
+          hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            audioRef.current.play().catch(e => console.error('Play error:', e));
+          });
+        } else if (audioRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+          audioRef.current.src = data.playlist_url;
+          audioRef.current.addEventListener('loadedmetadata', function () {
+            audioRef.current.play().catch(e => console.error('Play error:', e));
           });
         } else {
-          audioRef.current.src = data.download_url;
-          await audioRef.current.play();
-          await startPlayback(track.id);
-          pingInterval.current = setInterval(() => sendPing(track.id), 10000);
+          throw new Error('HLS is not supported in this browser');
         }
+        
+        pingInterval.current = setInterval(() => sendPing(track.id), 10000);
       } else {
-        throw new Error('No download URL');
+        throw new Error('No playlist URL');
       }
     } catch (err) {
-      console.error(err);
-      alert('Cannot play track');
+      console.error('playTrack error:', err);
+      alert('Cannot play track: ' + err.message);
     }
   };
 
@@ -366,7 +373,7 @@ const loadStats = async () => {
             <h2><BsUpload /> Upload your music</h2>
             <button className="upload-center-btn" onClick={() => setIsUploadModalOpen(true)}><BsUpload /> Upload</button>
           </div>
-          <Top24 onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} />
+          <Top24 onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} isPlaying={isPlaying}/>
           <ListeningNow listeners={listeners} tracks={tracks} onPlay={playTrack} onDownload={downloadTrack} onTrackClick={handleTrackClick} />
         </div>
       </div>

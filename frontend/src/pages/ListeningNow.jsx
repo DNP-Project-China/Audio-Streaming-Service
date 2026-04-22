@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { BsPlayFill, BsDownload, BsActivity } from 'react-icons/bs';
 
-export default function ListeningNow({ listeners, tracks, onPlay, onDownload, onTrackClick }) {
+export default function ListeningNow({ listeners, tracks, onPlay, onDownload, onTrackClick, isPlaying }) {
   // Фильтруем треки, у которых есть хотя бы один слушатель
   const activeTracks = tracks.filter(track => (listeners[track.id] || 0) > 0);
 
