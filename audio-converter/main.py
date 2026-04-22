@@ -78,7 +78,7 @@ def main():
                 print(f"[FAILED] {job_id}: Failed to upload HLS files")
                 continue
 
-        hls_playlist_key = f"{track_id}/master.m3u8" 
+        hls_playlist_key = f"hls/{track_id}/master.m3u8" 
         update_track_ready(track_id, hls_playlist_key)
         print(f"[SUCCESS] {job_id}: Task completed successfully ---\n")
 
