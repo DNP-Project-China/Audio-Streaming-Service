@@ -59,19 +59,35 @@ async def process_event(event: PlaybackEvent) -> None:
 
 
 async def consume_playback_events() -> None:
-    await consumer.start()
-    try:
-        async for msg in consumer:
+    while True:
+        try:
+            await consumer.start()
+            print("statistics-api: kafka consumer started", flush=True)
+
+            async for msg in consumer:
+                try:
+                    payload = json.loads(msg.value.decode("utf-8"))
+                    if "ts" not in payload:
+                        payload["ts"] = now_utc_iso()
+                    event = PlaybackEvent(**payload)
+                    await process_event(event)
+                    if event.status == "started":
+                        print(f"statistics-api: play started for {event.track_id}", flush=True)
+                except (json.JSONDecodeError, ValidationError) as exc:
+                    print(f"statistics-api: bad event skipped: {exc}", flush=True)
+                except Exception as exc:
+                    print(f"statistics-api: event processing error: {exc}", flush=True)
+
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            print(f"statistics-api: consumer error: {exc}", flush=True)
+            await asyncio.sleep(3)
+        finally:
             try:
-                payload = json.loads(msg.value.decode("utf-8"))
-                if "ts" not in payload:
-                    payload["ts"] = now_utc_iso()
-                event = PlaybackEvent(**payload)
-                await process_event(event)
-            except (json.JSONDecodeError, ValidationError):
-                continue
-    finally:
-        await consumer.stop()
+                await consumer.stop()
+            except Exception:
+                pass
 
 async def flush_plays_once() -> None:
     data = await redis_client.hgetall("plays:delta")
