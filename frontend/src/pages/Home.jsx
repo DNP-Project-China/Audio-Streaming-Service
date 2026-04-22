@@ -97,6 +97,12 @@ const loadStats = async () => {
     } catch (err) {}
   };
 
+  const ensurePingLoop = (trackId) => {
+    if (!trackId || pingInterval.current) return;
+    sendPing(trackId);
+    pingInterval.current = setInterval(() => sendPing(trackId), 10000);
+  };
+
   const sendStop = async (trackId) => {
     try {
       await fetch('/tracking/stop', {
@@ -146,7 +152,7 @@ const loadStats = async () => {
           throw new Error('HLS is not supported in this browser');
         }
         
-        pingInterval.current = setInterval(() => sendPing(track.id), 10000);
+        ensurePingLoop(track.id);
       } else {
         throw new Error('No playlist URL');
       }
@@ -223,6 +229,9 @@ const loadStats = async () => {
         audioRef.current.pause();
       } else {
         audioRef.current.play();
+        if (currentTrack) {
+          ensurePingLoop(currentTrack.id);
+        }
       }
     }
   };
