@@ -9,11 +9,16 @@ This system allows users to upload audio files (MP3, FLAC, WAV), which are autom
 The project is built on a microservices architecture, heavily utilizing an event-driven approach for asynchronous communication:
 
 * **Core API (Go):** The primary entry point for managing metadata and uploading original files. Implements the **Saga pattern** (compensating transactions) to ensure distributed fault tolerance and eventual consistency across PostgreSQL, S3, and Kafka.
-* **Audio Converter (Python):** A **stateless** worker service for CPU-bound audio transcoding (FFmpeg). Designed for horizontal scalability, it ensures **At-Least-Once delivery** semantics and prevents race conditions using **Optimistic Locking** at the database level.
+* **Audio Converter (Python):** A **stateless** worker service for CPU-bound audio transcoding (FFmpeg) and uploading it to S3 database. Designed for horizontal scalability, it ensures **At-Least-Once delivery** semantics working with Kafka and prevents race conditions using **Optimistic Locking** at the Postgre SQL database level.
 * **Playback API (Python/FastAPI):** Manages audio streaming sessions. Utilizes a **stateless session management** pattern via **Redis Keyspace Notifications** (distributed TTL) to detect client timeouts without running heavy in-memory polling loops.
 * **Statistics API (Python/FastAPI):** The real-time stream analytics engine. Based on Redis soted set updates music current online and total plays in time. Additionally implements the **Write-Behind Caching** pattern (aggregating state deltas in Redis (by using hashes) before batch-flushing to PostgreSQL) to protect the persistent storage from high I/O write loads during heavy streaming.
 * **Frontend (React/Vite):** Client-side Single Page Application (SPA).
 * **Infrastructure:** Apache Kafka (Message Broker), PostgreSQL (Relational DB), Redis (In-memory Cache/Session Store), MinIO (S3-compatible Object Storage), Docker & Docker Compose.
+
+---
+## 🌐 Try out
+
+You can try our service inside Innopolis University network: http://10.90.138.33
 
 ---
 
