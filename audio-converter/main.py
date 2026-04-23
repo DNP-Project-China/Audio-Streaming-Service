@@ -27,6 +27,7 @@ def create_consumer_with_retry(topic: str) -> KafkaConsumer:
                 group_id='transcoder-group',
                 value_deserializer=lambda x: json.loads(x.decode('utf-8')),
                 auto_offset_reset='earliest',
+                enable_auto_commit=False,
             )
         except NoBrokersAvailable:
             print(
@@ -53,34 +54,50 @@ def main():
         print(f"\n--- New Task: Job ID = {job_id}, Track ID = {track_id}, Priority = {priority} ---")
 
         current_status = get_track_status(track_id)
-        if current_status in ['processing', 'ready']:
-            print(f"Track {track_id} already has status '{current_status}'. Skipping.")
+        
+        if current_status == 'ready':
+            print(f"Track {track_id} already has status 'ready'. Skipping.")
+            consumer.commit()
             continue
 
-        update_track_status(track_id, 'processing')
+        is_task_acquired = update_track_status(track_id, 'processing')
+        
+        if not is_task_acquired:
+            print(f"Task {track_id} is locked by another instance. Skipping.")
+            consumer.commit()
+            continue
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            local_mp3 = os.path.join(tmpdir, "raw.mp3")
-            hls_output_dir = os.path.join(tmpdir, "hls")
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                local_mp3 = os.path.join(tmpdir, "raw.mp3")
+                hls_output_dir = os.path.join(tmpdir, "hls")
 
-            if not s3_client.download_file(path, local_mp3):
-                update_track_status(track_id, 'failed')
-                print(f"[FAILED] {job_id}: Failed to download file")
-                continue
+                if not s3_client.download_file(path, local_mp3):
+                    update_track_status(track_id, 'failed')
+                    print(f"[FAILED] {job_id}: Failed to download file")
+                    consumer.commit()
+                    continue
 
-            if not convert_audio_to_hls(local_mp3, hls_output_dir):
-                update_track_status(track_id, 'failed')
-                print(f"[FAILED] {job_id}: Failed to convert audio")
-                continue
+                if not convert_audio_to_hls(local_mp3, hls_output_dir):
+                    update_track_status(track_id, 'failed')
+                    print(f"[FAILED] {job_id}: Failed to convert audio")
+                    consumer.commit()
+                    continue
 
-            if not s3_client.upload_hls_folder(track_id, hls_output_dir):
-                update_track_status(track_id, 'failed')
-                print(f"[FAILED] {job_id}: Failed to upload HLS files")
-                continue
+                if not s3_client.upload_hls_folder(track_id, hls_output_dir):
+                    update_track_status(track_id, 'failed')
+                    print(f"[FAILED] {job_id}: Failed to upload HLS files")
+                    consumer.commit()
+                    continue
 
-        hls_playlist_key = f"hls/{track_id}/master.m3u8" 
-        update_track_ready(track_id, hls_playlist_key)
-        print(f"[SUCCESS] {job_id}: Task completed successfully ---\n")
-
+            hls_playlist_key = f"hls/{track_id}/master.m3u8" 
+            update_track_ready(track_id, hls_playlist_key)
+            
+            consumer.commit()
+            print(f"[SUCCESS] {job_id}: Task completed successfully ---\n")
+            
+        except Exception as e:
+            print(f"[CRITICAL] Worker crashed on job {job_id}: {e}")
+            
 if __name__ == "__main__":
     main()
