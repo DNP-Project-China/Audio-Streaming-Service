@@ -51,9 +51,11 @@ func (s *spyPublisher) PublishCreated(ctx context.Context, trackID string, path 
 var _ events.TranscodePublisher = (*spyPublisher)(nil)
 
 func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
+	// Prepare request metadata
 	artist := "Eminem-test-ok"
 	title := fmt.Sprintf("Mock Song OK %d", time.Now().UnixNano())
 
+	// Load configuration and initialize handler dependencies
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -75,6 +77,7 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 	pub := &spyPublisher{}
 	h := NewUploadHandler(cfg, queries, trackStore, pub)
 
+	// Build multipart request with fixture file
 	fixturePath := filepath.Join("testdata", "testfile.mp3")
 	fixtureBytes, err := os.ReadFile(fixturePath)
 	if err != nil {
@@ -101,6 +104,7 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	res := httptest.NewRecorder()
 
+	// Perform upload request and validate API response
 	h.ServeHTTP(res, req)
 
 	if res.Code != http.StatusCreated {
@@ -130,6 +134,7 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 		t.Fatalf("expected priority=%d, got %d", cfg.TranscodeJobPriority, pub.priority)
 	}
 
+	// Load stored track and compare source bytes with fixture
 	var trackID pgtype.UUID
 	if err := trackID.Scan(out.TrackID); err != nil {
 		t.Fatalf("parse track uuid: %v", err)
@@ -149,6 +154,7 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 		t.Fatalf("uploaded file bytes differ from stored object bytes")
 	}
 
+	// Cleanup created storage object and database row
 	if err := s3store.DeleteObject(ctx, track.OriginalObjectKey); err != nil {
 		t.Fatalf("cleanup s3 object: %v", err)
 	}
@@ -158,9 +164,11 @@ func TestUpload_StoresFileAndRoundTripsBytes(t *testing.T) {
 }
 
 func TestUpload_Returns500WhenPublishFails(t *testing.T) {
+	// Prepare request metadata
 	artist := "Eminem-test-fail"
 	title := fmt.Sprintf("Mock Song FAIL %d", time.Now().UnixNano())
 
+	// Load configuration and initialize handler dependencies
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -182,6 +190,7 @@ func TestUpload_Returns500WhenPublishFails(t *testing.T) {
 	pub := &spyPublisher{err: fmt.Errorf("kafka unavailable")}
 	h := NewUploadHandler(cfg, queries, trackStore, pub)
 
+	// Build multipart request with fixture file
 	fixturePath := filepath.Join("testdata", "testfile.mp3")
 	fixtureBytes, err := os.ReadFile(fixturePath)
 	if err != nil {
@@ -207,12 +216,15 @@ func TestUpload_Returns500WhenPublishFails(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/upload", body)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	res := httptest.NewRecorder()
+
+	// Publish failure should return internal server error
 	h.ServeHTTP(res, req)
 
 	if res.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status 500, got %d, body=%s", res.Code, res.Body.String())
 	}
 
+	// Verify transaction rollback by checking no matching track remains
 	tracks, err := queries.ListTracks(ctx)
 	if err != nil {
 		t.Fatalf("list tracks: %v", err)
