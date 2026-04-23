@@ -9,6 +9,7 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+// Configuration for the server, loaded from environment variables
 type Config struct {
 	Port                  int           `env:"CORE_API_PORT" envDefault:"8000"`
 	HTTPReadHeaderTimeout time.Duration `env:"CORE_API_READ_HEADER_TIMEOUT" envDefault:"5s"`
@@ -36,6 +37,7 @@ type Config struct {
 	PostgresSSLMode       string        `env:"POSTGRES_SSLMODE" envDefault:"disable"`
 }
 
+// Build a public URL for an object in S3 based on the configured base URL and the object key
 func (c *Config) BuildPublicObjectURL(objectKey string) (string, error) {
 	if c.S3PublicBaseURL == "" {
 		return "", nil
@@ -50,6 +52,7 @@ func (c *Config) BuildPublicObjectURL(objectKey string) (string, error) {
 	return base.String(), nil
 }
 
+// Build a database connection URL for PostgreSQL
 func (c *Config) DatabaseURL() string {
 	dbURL := &url.URL{
 		Scheme: "postgres",
@@ -65,6 +68,7 @@ func (c *Config) DatabaseURL() string {
 	return dbURL.String()
 }
 
+// DI constructor for Config
 func NewConfig() (*Config, error) {
 	var cfg Config
 	err := env.Parse(&cfg)

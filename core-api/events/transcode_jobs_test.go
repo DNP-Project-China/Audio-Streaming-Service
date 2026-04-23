@@ -14,6 +14,7 @@ import (
 	"github.com/segmentio/kafka-go"
 )
 
+// Test for availability of Kafka and correctness of PublishCreated method
 func TestKafkaTranscodePublisher_PublishCreated_WritesTopicMessage(t *testing.T) {
 	cfg, err := server.NewConfig()
 	if err != nil {
@@ -37,6 +38,7 @@ func TestKafkaTranscodePublisher_PublishCreated_WritesTopicMessage(t *testing.T)
 		t.Fatalf("create kafka topic: %v", err)
 	}
 
+	// Create a Kafka writer for the test topic
 	writer := &kafka.Writer{
 		Addr:                   kafka.TCP(brokers...),
 		Topic:                  topic,
@@ -48,6 +50,7 @@ func TestKafkaTranscodePublisher_PublishCreated_WritesTopicMessage(t *testing.T)
 	}
 	defer writer.Close()
 
+	// Publish a transcode job and verify it appears in the topic
 	pub := &KafkaTranscodePublisher{writer: writer}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -67,6 +70,7 @@ func TestKafkaTranscodePublisher_PublishCreated_WritesTopicMessage(t *testing.T)
 	})
 	defer reader.Close()
 
+	// Read the message from Kafka and verify its contents
 	msg, err := reader.ReadMessage(ctx)
 	if err != nil {
 		t.Fatalf("read kafka message: %v", err)
@@ -81,6 +85,7 @@ func TestKafkaTranscodePublisher_PublishCreated_WritesTopicMessage(t *testing.T)
 		t.Fatalf("decode kafka payload: %v", err)
 	}
 
+	// Integrity checks for payload fields
 	if payload.TrackID != trackID {
 		t.Fatalf("payload track_id mismatch: got=%q want=%q", payload.TrackID, trackID)
 	}
@@ -95,6 +100,7 @@ func TestKafkaTranscodePublisher_PublishCreated_WritesTopicMessage(t *testing.T)
 	}
 }
 
+// TCP healthcheck for kafka
 func kafkaReachable(addr string) bool {
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
@@ -104,6 +110,7 @@ func kafkaReachable(addr string) bool {
 	return true
 }
 
+// Create topic if not exists, basically
 func ensureTopic(addr string, topic string) error {
 	host, portRaw, err := net.SplitHostPort(addr)
 	if err != nil {
