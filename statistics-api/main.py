@@ -135,6 +135,7 @@ async def flush_plays_once() -> None:
     await redis_client.delete("plays:delta")
     print("flush: plays:delta cleared", flush=True)
 # Flush loop that runs flush_plays_once every FLUSH_INTERVAL_SECONDS seconds
+async def flush_plays_loop() -> None:
     print("flush: loop started", flush=True)
     while True:
         try:
