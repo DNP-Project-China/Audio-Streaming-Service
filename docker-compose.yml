@@ -159,7 +159,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-core}
       KAFKA_BROKERS: kafka:9092
       KAFKA_PLAYBACK_TOPIC: playback-events
-      KAFKA_STATS_GROUP: statistics-api-v1
+      KAFKA_STATS_GROUP: statistics-api
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
@@ -180,7 +180,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 60s
     networks:
       - music-net
 
