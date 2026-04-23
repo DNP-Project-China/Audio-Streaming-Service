@@ -27,13 +27,3 @@ def convert_audio_to_hls(input_file: str, output_dir: str) -> bool:
         print(f"Error converting audio: {result.stderr}")
         return False
     return True
-
-
-if __name__ == "__main__":
-    input = "/home/leonid/Downloads/divnaya_musika.mp3"
-    output_dir = "/home/leonid/Downloads/hls"
-    res = convert_audio_to_hls(input, output_dir)
-    if res:
-        print("Audio conversion successful.")
-    else:
-        print("Audio conversion failed.")
