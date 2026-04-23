@@ -25,6 +25,7 @@ consumer_ready = False
 UPDATE_TIME_RATE = 20
 TOP_TRACKS_LIMIT = 10
 FLUSH_INTERVAL_SECONDS = 60
+RETRY_DELAY_SECONDS = 10
 
 # Validation (converter) of event from kafka 
 class PlaybackEvent(BaseModel):
@@ -58,29 +59,38 @@ async def process_event(event: PlaybackEvent) -> None:
         await redis_client.zincrby("plays:counter", 1, track_id)
         await redis_client.hincrby("plays:delta", track_id, 1)
 
+    # ZSET stores presence information, HASH stores delta count of plays (in specified time)
+
+# Consumer creation n
+async def consumer_creation(kafka_brokers: str, kafka_topic: str, kafka_group: str) -> AIOKafkaConsumer:
+    # Create an aiokafka consumer instance configured for our topic/group.
+    # Returned consumer should be started by the caller with `await consumer.start()`.
+    return AIOKafkaConsumer(
+        kafka_topic,
+        bootstrap_servers=kafka_brokers,
+        group_id=kafka_group,
+        enable_auto_commit=True,
+        auto_offset_reset="latest",
+    )
+
 # Kafka consumer loop, which will consume events and process them, with error handling and reconnection logic
 async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_group: str) -> None:
+    global consumer_ready
     while True:
         local_consumer = None
-        started = False
-        global consumer_ready
+        # We create a fresh consumer on each loop iteration to avoid re-using
+        # a previously-started AIOKafkaConsumer (which can raise about double-start).
         try:
-            # We create a new consumer on each iteration, so if there is an error, we will try to reconnect after a delay
-            local_consumer = AIOKafkaConsumer(
-                kafka_topic,
-                bootstrap_servers=kafka_brokers,
-                group_id=kafka_group,
-                enable_auto_commit=True,
-                auto_offset_reset="latest",
-            )
+            local_consumer = await consumer_creation(kafka_brokers, kafka_topic, kafka_group)
             await local_consumer.start()
-            started = True
             consumer_ready = True
+            await asyncio.sleep(RETRY_DELAY_SECONDS)
             print("statistics-api: kafka consumer started", flush=True)
-            # Message processing loop
+            # Message processing loop: iterate over incoming messages and handle them.
             async for msg in local_consumer:
                 try:
                     payload = json.loads(msg.value.decode("utf-8"))
+
                     # Adding a timestamp if it's not provided in the event, so we can use it in future
                     if "ts" not in payload:
                         payload["ts"] = now_utc_iso()
@@ -88,11 +98,13 @@ async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_gr
                     await process_event(event)
                     if event.status == "started":
                         print(f"statistics-api: play started for {event.track_id}", flush=True)
+
                 # Error handling for message processing
                 except (json.JSONDecodeError, ValidationError) as exc:
                     print(f"statistics-api: bad event skipped: {exc}", flush=True)
                 except Exception as exc:
                     print(f"statistics-api: event processing error: {exc}", flush=True)
+                    
         # Error handling for consumer connection and loop
         except asyncio.CancelledError:
             consumer_ready = False
@@ -101,13 +113,16 @@ async def consume_playback_events(kafka_brokers: str, kafka_topic: str, kafka_gr
             print(f"statistics-api: consumer error: {exc}", flush=True)
             consumer_ready = False
             await asyncio.sleep(3)
+
+        # Ensure the consumer is stopped on error/shutdown so resources are released
         finally:
-            if local_consumer and started:
+            if local_consumer is not None:
                 try:
                     await local_consumer.stop()
                     consumer_ready = False
                 except Exception as exc:
                     print(f"statistics-api: consumer stop error: {exc}", flush=True)
+
 # One-minute job for updating total_pays collums in database
 async def flush_plays_once() -> None:
     data = await redis_client.hgetall("plays:delta")
@@ -116,7 +131,8 @@ async def flush_plays_once() -> None:
         return
     
     print(f"flush: processing {len(data)} tracks", flush=True)
-    # uopdating database
+
+    # updating database
     async with db_pool.acquire() as conn:
         async with conn.transaction():
             for track_id, cnt_str in data.items():
@@ -131,9 +147,19 @@ async def flush_plays_once() -> None:
                     track_id,
                     cnt,
                 )
-    # Elliminate Redis delta collection after flushing to the database, to avoid overcounting
-    await redis_client.delete("plays:delta")
+
+    # Eliminate Redis delta data collection after flushing to the database, to avoid overcounting
+    # Delete the keys we just processed. We call HGETALL again to collect current keys
+    # and then HDEL them to avoid deleting entries added after this function started.
+    hashes = list(redis_client.hgetall("plays:delta").keys())
+    if hashes:
+        await redis_client.hdel("plays:delta", *hashes)
     print("flush: plays:delta cleared", flush=True)
+
+    # Note: this simple approach may miss increments added concurrently during flush.
+    # For stronger correctness consider RENAME-based swap or Lua script to atomically
+    # move and clear the hash.
+
 # Flush loop that runs flush_plays_once every FLUSH_INTERVAL_SECONDS seconds
 async def flush_plays_loop() -> None:
     print("flush: loop started", flush=True)
@@ -153,12 +179,14 @@ async def flush_plays_loop() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global db_pool, redis_client, consumer_task, flush_task
+
     # Redis connection 
     redis_host = os.getenv("REDIS_HOST", "localhost")
     redis_port = os.getenv("REDIS_PORT", "6379")
     redis_db = os.getenv("REDIS_DB", "0")
     redis_url = f"redis://{redis_host}:{redis_port}/{redis_db}"
     redis_client = redis.from_url(redis_url, decode_responses=True)
+
     # Database connection pool
     db_user = os.getenv("POSTGRES_USER", "postgres")
     db_pass = os.getenv("POSTGRES_PASSWORD", "postgres")
@@ -167,18 +195,22 @@ async def lifespan(app: FastAPI):
     db_name = os.getenv("POSTGRES_DB", "core")
     db_url = f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
     db_pool = await asyncpg.create_pool(db_url)
+
     # Kafka consumer connection parameters
     kafka_brokers = os.getenv("KAFKA_BROKERS", "localhost:9094")
     kafka_topic = os.getenv("KAFKA_PLAYBACK_TOPIC", "playback-events")
-    kafka_group = os.getenv("KAFKA_STATS_GROUP", "statistics-api-v1")
+    kafka_group = os.getenv("KAFKA_STATS_GROUP", "statistics-api-group")
+
     # Starting the consumer and flush tasks
     consumer_task = asyncio.create_task(consume_playback_events(kafka_brokers, kafka_topic, kafka_group))
     flush_task = asyncio.create_task(flush_plays_loop())
     print("statistics-api: consumer and flush tasks started", flush=True)
+
     # Separation of code for 2 parts:
     # Frist executes when the application starts
     # Second executes when the application is shutting down
     yield
+    
     # Сlean up on shutdown: cancel tasks and close connections
     if consumer_task:
         consumer_task.cancel()
