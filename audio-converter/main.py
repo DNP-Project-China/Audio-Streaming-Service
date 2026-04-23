@@ -68,22 +68,23 @@ def main():
         path = job.get('path')
         priority = job.get('priority', 0)
 
-        print(f"\n--- New Task: Job ID = {job_id}, Track ID = {track_id}, Priority = {priority} ---")
+        print(
+            f"\n--- New Task: Job ID = {job_id}, Track ID = {track_id}, Priority = {priority} ---")
 
         current_status = get_track_status(track_id)
-        
+
         # Idempotency check: Since we use At-Least-Once delivery, duplicates may occur.
         # If the track is fully processed, we acknowledge the message and skip.
         if current_status == 'ready':
             print(f"Track {track_id} already has status 'ready'. Skipping.")
-            consumer.commit() 
+            consumer.commit()
             continue
 
         # Concurrency Control (Optimistic Locking):
         # Attempts to acquire an exclusive lock on the task via a conditional database UPDATE.
         # This prevents race conditions if multiple worker instances receive the same message.
         is_task_acquired = update_track_status(track_id, 'processing')
-        
+
         if not is_task_acquired:
             print(f"Task {track_id} is locked by another instance. Skipping.")
             # Acknowledge the message since another worker is already handling it
@@ -97,21 +98,22 @@ def main():
                 local_mp3 = os.path.join(tmpdir, "raw.mp3")
                 hls_output_dir = os.path.join(tmpdir, "hls")
 
-                # Step 1: Fetch raw data from distributed object storage
+                # Fetch raw data from distributed object storage
                 if not s3_client.download_file(path, local_mp3):
                     update_track_status(track_id, 'failed')
                     print(f"[FAILED] {job_id}: Failed to download file")
-                    consumer.commit() # Commit offset on explicit application failure
+                    # Commit offset on explicit application failure
+                    consumer.commit()
                     continue
 
-                # Step 2: CPU-intensive transcoding task
+                # Transcoding task
                 if not convert_audio_to_hls(local_mp3, hls_output_dir):
                     update_track_status(track_id, 'failed')
                     print(f"[FAILED] {job_id}: Failed to convert audio")
                     consumer.commit()
                     continue
 
-                # Step 3: Persist processed artifacts back to storage
+                # Persist processed artifacts back to storage
                 if not s3_client.upload_hls_folder(track_id, hls_output_dir):
                     update_track_status(track_id, 'failed')
                     print(f"[FAILED] {job_id}: Failed to upload HLS files")
@@ -119,19 +121,21 @@ def main():
                     continue
 
             # Commit phase: Update distributed state only after successful side-effects
-            hls_playlist_key = f"hls/{track_id}/master.m3u8" 
+            hls_playlist_key = f"hls/{track_id}/master.m3u8"
             update_track_ready(track_id, hls_playlist_key)
-            
+
             # Finalize task: Acknowledge successful processing to the Kafka broker
             consumer.commit()
             print(f"[SUCCESS] {job_id}: Task completed successfully ---\n")
-            
+
         except Exception as e:
             # Critical Failure Handler:
             # If the process crashes (e.g., OOM during FFmpeg, unhandled exception),
-            # consumer.commit() is intentionally bypassed. Kafka will reassign 
-            # this message to another consumer in the group after a session timeout.
+            # consumer.commit() is intentionally bypassed.
+            # Kafka will reassign this message to another consumer in the group
+            # after a session timeout.
             print(f"[CRITICAL] Worker crashed on job {job_id}: {e}")
-            
+
+
 if __name__ == "__main__":
     main()
