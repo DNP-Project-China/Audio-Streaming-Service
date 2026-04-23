@@ -11,7 +11,7 @@ export default function Top24({ onPlay, onDownload, onTrackClick, currentTrack, 
         const res = await fetch('/stats/live');
         const data = await res.json();
         if (data.items && Array.isArray(data.items)) {
-          // Сортируем по total_plays (убывание) и берём первые 3
+          // Sort by total_plays descending and take the top 3
           const sorted = [...data.items].sort((a, b) => b.total_plays - a.total_plays);
           setTopTracks(sorted.slice(0, 3));
         } else {
@@ -27,6 +27,7 @@ export default function Top24({ onPlay, onDownload, onTrackClick, currentTrack, 
     return () => clearInterval(interval);
   }, []);
 
+  // Helper to transform raw track data into the shape expected by parent components
   const getTrack = (track) => ({ 
     id: track.track_id, 
     filename: `${track.artist} - ${track.title}` 
