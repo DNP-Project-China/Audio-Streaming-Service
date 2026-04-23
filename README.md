@@ -16,7 +16,7 @@ The project is built on a microservices architecture, heavily utilizing an event
 * **Infrastructure:** Apache Kafka (Message Broker), PostgreSQL (Relational DB), Redis (In-memory Cache/Session Store), MinIO (S3-compatible Object Storage), Docker & Docker Compose.
 
 ---
-## 🌐 Try out
+## 🌐 Try Out
 
 You can try our service inside Innopolis University network: http://10.90.138.33
 
