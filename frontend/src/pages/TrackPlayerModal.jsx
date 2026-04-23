@@ -12,6 +12,7 @@ export default function TrackPlayerModal({
   onTogglePlay, 
   onSkip 
 }) {
+  // Helper: format seconds into MM:SS
   const formatTime = (time) => {
     if (isNaN(time) || time === Infinity) return '0:00';
     const minutes = Math.floor(time / 60);
@@ -19,11 +20,13 @@ export default function TrackPlayerModal({
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
+  // Don't render modal if no track is selected
   if (!track) return null;
 
   return (
     <AnimatePresence>
       {isOpen && (
+        // Backdrop overlay
         <motion.div
           className="modal-overlay"
           initial={{ opacity: 0 }}
@@ -31,6 +34,7 @@ export default function TrackPlayerModal({
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
+          {/* Modal panel */}
           <motion.div
             className="modal-content track-player-modal"
             initial={{ scale: 0.9, y: 20 }}
@@ -38,10 +42,12 @@ export default function TrackPlayerModal({
             exit={{ scale: 0.9, y: 20 }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Close button */}
             <button className="modal-close" onClick={onClose}>
               <BsX />
             </button>
 
+            {/* Animated GIF / visualizer placeholder */}
             <div className="modal-gif">
               <img
                 src="https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExeWYxZ2xkNXFnbWV1eW8zYWRlODR4N3B5ZGJscmtwbGQxc3Bsc3MzMyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/ytu2GUYbvhz7zShGwS/giphy.gif"
@@ -50,8 +56,10 @@ export default function TrackPlayerModal({
               />
             </div>
 
+            {/* Track title */}
             <h3 className="modal-track-title">{track.filename}</h3>
 
+            {/* Progress bar with time labels */}
             <div className="track-progress-container" style={{ width: '100%', marginBottom: '20px', padding: '0', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#8b9bb4', marginBottom: '8px' }}>
                 <span>{formatTime(currentTime)}</span>
@@ -68,11 +76,16 @@ export default function TrackPlayerModal({
               />
             </div>
 
+            {/* Playback controls (skip back, play/pause, skip forward) */}
             <div className="custom-audio-controls" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
               <button className="skip-btn" onClick={() => onSkip(-10)}>
                 <BsRewind /> <span>10</span>
               </button>
-              <button className="play-pause-btn" onClick={onTogglePlay} style={{ background: '#00f3ff', color: 'black', border: 'none', borderRadius: '50%', width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', cursor: 'pointer', boxShadow: '0 0 10px #00f3ff' }}>
+              <button 
+                className="play-pause-btn" 
+                onClick={onTogglePlay} 
+                style={{ background: '#00f3ff', color: 'black', border: 'none', borderRadius: '50%, width: 50px, height: 50px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', cursor: 'pointer', boxShadow: '0 0 10px #00f3ff' }}
+              >
                 {isPlaying ? <BsPauseFill /> : <BsPlayFill />}
               </button>
               <button className="skip-btn" onClick={() => onSkip(10)}>

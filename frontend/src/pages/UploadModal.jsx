@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BsCloudUpload, BsFileMusic, BsX } from 'react-icons/bs';
 
+// Maximum time to wait for upload completion before aborting
 const UPLOAD_TIMEOUT_MS = 300000;
 
 export default function UploadModal({ isOpen, onClose, onUpload }) {
@@ -10,9 +11,12 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
   const [title, setTitle] = useState('');
   const [status, setStatus] = useState('');
 
+  // Store selected file
   const handleFile = (e) => setFile(e.target.files[0]);
 
+  // Handle upload submission
   const upload = async () => {
+    // Validate inputs
     if (!file) { setStatus('Select a file'); return; }
     if (!artist.trim() || !title.trim()) { setStatus('Artist and Title are required'); return; }
 
@@ -22,6 +26,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
     formData.append('title', title);
     setStatus('Uploading...');
 
+    // Set up abort controller with timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
 
@@ -33,13 +38,14 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
       });
       if (res.ok) {
         setStatus('✅ Uploaded! Processing...');
+        // Clear form and close modal after short delay
         setFile(null);
         setArtist('');
         setTitle('');
         setTimeout(() => {
           onClose();
           setStatus('');
-          if (onUpload) onUpload(); // обновить список треков
+          if (onUpload) onUpload(); // Refresh track list
         }, 2000);
       } else {
         const err = await res.json();
@@ -59,6 +65,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
   return (
     <AnimatePresence>
       {isOpen && (
+        // Backdrop overlay
         <motion.div
           className="modal-overlay"
           initial={{ opacity: 0 }}
@@ -66,6 +73,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
+          {/* Modal panel */}
           <motion.div
             className="modal-content"
             initial={{ scale: 0.9, y: 20 }}
@@ -77,7 +85,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
             <h2><BsCloudUpload /> Upload Music</h2>
             <p>MP3, FLAC, WAV</p>
 
-            {/* Поля artist и title */}
+            {/* Artist and title input fields */}
             <input
               type="text"
               placeholder="Artist"
@@ -95,6 +103,7 @@ export default function UploadModal({ isOpen, onClose, onUpload }) {
               style={{ marginBottom: 10 }}
             />
 
+            {/* File picker */}
             <label className="file-label">
               <BsFileMusic /> Choose file
               <input type="file" accept=".mp3,.flac,.wav" onChange={handleFile} style={{ display: 'none' }} />

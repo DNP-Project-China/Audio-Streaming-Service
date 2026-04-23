@@ -19,7 +19,7 @@ function App() {
     <BrowserRouter>
       <div className="app">
         <header className="header">
-          <div className="logo">🎵 DNP Music</div>
+          <div className="logo">🎵 Waves</div>
           {/*<div className="session-badge">{sessionId}</div>*/}
         </header>
         <Routes>

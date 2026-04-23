@@ -8,6 +8,7 @@ import ListeningNow from './ListeningNow';
 import TrackPlayerModal from './TrackPlayerModal';
 
 export default function Home() {
+  // State for track list, current playing track, listener counts, play counts, modal visibility, search, player modal, playback progress
   const [tracks, setTracks] = useState([]);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [listeners, setListeners] = useState({});
@@ -19,10 +20,13 @@ export default function Home() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(1);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Refs for audio element, HLS instance, and ping interval
   const audioRef = useRef(null);
   const hlsRef = useRef(null);
   const pingInterval = useRef(null);
 
+  // Fetch all tracks from the API
   const loadTracks = async () => {
     try {
       const res = await fetch('/api/tracks');
@@ -40,29 +44,31 @@ export default function Home() {
     }
   };
 
-const loadStats = async () => {
-  try {
-    const res = await fetch('/stats/live');
-    const data = await res.json();
-    const listenersMap = {};
-    const playsMap = {};
+  // Fetch live statistics (listeners and total plays per track)
+  const loadStats = async () => {
+    try {
+      const res = await fetch('/stats/live');
+      const data = await res.json();
+      const listenersMap = {};
+      const playsMap = {};
 
-    if (data.items && Array.isArray(data.items)) {
-      data.items.forEach(item => {
-        listenersMap[item.track_id] = item.online_now || 0;
-        playsMap[item.track_id] = item.total_plays || 0;
-      });
+      if (data.items && Array.isArray(data.items)) {
+        data.items.forEach(item => {
+          listenersMap[item.track_id] = item.online_now || 0;
+          playsMap[item.track_id] = item.total_plays || 0;
+        });
+      }
+
+      setListeners(listenersMap);
+      setPlays(playsMap);
+    } catch (err) {
+      console.error('Failed to load statistics', err);
+      setListeners({});
+      setPlays({})
     }
+  };
 
-    setListeners(listenersMap);
-    setPlays(playsMap);
-  } catch (err) {
-    console.error('Failed to load statistics', err);
-    setListeners({});
-    setPlays({})
-  }
-};
-
+  // Initial load and periodic refresh of tracks and stats
   useEffect(() => {
     loadTracks();
     loadStats();
@@ -75,15 +81,17 @@ const loadStats = async () => {
     return () => clearInterval(interval);
   }, []);
 
-  // --- Трекинг через playback-api ---
+  // --- Playback tracking functions ---
+  // Start a playback session for a track
   const startPlayback = async (trackId) => {
     try {
-      await fetch(`/tracking/play/${trackId}`); // GET запрос (инициирует сессию)
+      await fetch(`/tracking/play/${trackId}`); // GET request (initiates a session)
     } catch (err) {
       console.error('Failed to start playback tracking', err);
     }
   };
 
+  // Send periodic ping to keep the session alive
   const sendPing = async (trackId) => {
     try {
       await fetch('/tracking/ping', {
@@ -97,12 +105,14 @@ const loadStats = async () => {
     } catch (err) {}
   };
 
+  // Start the ping loop for a given track (if not already running)
   const ensurePingLoop = (trackId) => {
     if (!trackId || pingInterval.current) return;
     sendPing(trackId);
     pingInterval.current = setInterval(() => sendPing(trackId), 10000);
   };
 
+  // Stop the playback session for a track
   const sendStop = async (trackId) => {
     try {
       await fetch('/tracking/stop', {
@@ -116,7 +126,9 @@ const loadStats = async () => {
     } catch (err) {}
   };
 
+  // Main play function: stops current playback, starts new session, loads HLS stream
   const playTrack = async (track) => {
+    // Stop previous track if any
     if (pingInterval.current) {
       clearInterval(pingInterval.current);
       if (currentTrack) await sendStop(currentTrack.id);
@@ -132,6 +144,7 @@ const loadStats = async () => {
       const data = await res.json();
       
       if (data.playlist_url) {
+        // Use HLS.js if supported
         if (Hls.isSupported()) {
           if (hlsRef.current) {
             hlsRef.current.destroy();
@@ -143,6 +156,7 @@ const loadStats = async () => {
           hls.on(Hls.Events.MANIFEST_PARSED, function () {
             audioRef.current.play().catch(e => console.error('Play error:', e));
           });
+        // Fallback for native HLS support (Safari)
         } else if (audioRef.current.canPlayType('application/vnd.apple.mpegurl')) {
           audioRef.current.src = data.playlist_url;
           audioRef.current.addEventListener('loadedmetadata', function () {
@@ -152,6 +166,7 @@ const loadStats = async () => {
           throw new Error('HLS is not supported in this browser');
         }
         
+        // Start sending pings for this track
         ensurePingLoop(track.id);
       } else {
         throw new Error('No playlist URL');
@@ -162,6 +177,7 @@ const loadStats = async () => {
     }
   };
 
+  // Download a track by its ID
   const downloadTrack = async (id) => {
     try {
       const res = await fetch(`/api/download/${id}`);
@@ -173,13 +189,14 @@ const loadStats = async () => {
     }
   };
 
+  // Seek forward/backward by a given number of seconds
   const skip = (seconds) => {
     if (audioRef.current) {
       audioRef.current.currentTime += seconds;
     }
   };
 
-  // Остановка трекинга при паузе или закрытии
+  // Stop tracking when audio is paused or the page is closed
   useEffect(() => {
     const handlePause = () => {
       if (currentTrack && pingInterval.current) {
@@ -203,19 +220,21 @@ const loadStats = async () => {
     }
   }, [currentTrack]);
 
+  // Filter tracks based on search input
   const filteredTracks = tracks.filter(track =>
     track.filename.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Handle track click: play if different track, then open full player modal
   const handleTrackClick = (track) => {
-    // Не запускаем заново, если это тот же трек
     if (!currentTrack || currentTrack.id !== track.id) {
       playTrack(track);
     }
     setIsPlayerModalOpen(true);
   };
 
-   const handleSeek = (e) => {
+  // Seek from progress bar
+  const handleSeek = (e) => {
     const newTime = Number(e.target.value);
     setCurrentTime(newTime);
     if (audioRef.current) {
@@ -223,6 +242,7 @@ const loadStats = async () => {
     }
   };
 
+  // Toggle play/pause
   const togglePlay = () => {
     if (audioRef.current) {
       if (isPlaying) {
@@ -236,6 +256,7 @@ const loadStats = async () => {
     }
   };
 
+  // Volume control
   const handleVolumeChange = (e) => {
     const newVol = parseFloat(e.target.value);
     setVolume(newVol);
@@ -244,18 +265,21 @@ const loadStats = async () => {
     }
   };
 
+  // Update current time while playing
   const handleTimeUpdate = () => {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
     }
   };
 
+  // Store media duration when metadata loads
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
     }
   };
 
+  // Helper to format time in mm:ss
   const formatTime = (time) => {
     if (isNaN(time) || time === Infinity) return '0:00';
     const minutes = Math.floor(time / 60);
@@ -271,7 +295,7 @@ const loadStats = async () => {
       className="home-container"
     >
       <div className="two-columns">
-        {/* Левая колонка */}
+        {/* Left column: now playing card + search + track list */}
         <div className="left-column">
           <div className="now-playing-card no-cover">
             <h2><BsHeadphones /> Playing Now</h2>
@@ -285,6 +309,7 @@ const loadStats = async () => {
               onEnded={() => setIsPlaying(false)}
             />
 
+            {/* Progress bar */}
             <div className="track-progress-container" style={{ width: '100%', marginBottom: '20px', padding: '0 20px', boxSizing: 'border-box' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#8b9bb4', marginBottom: '8px' }}>
                 <span>{formatTime(currentTime)}</span>
@@ -301,6 +326,7 @@ const loadStats = async () => {
               />
             </div>
             
+            {/* Playback controls, volume, and track stats */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '20px', marginTop: '15px' }}>
               
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px', color: '#8b9bb4' }}>
@@ -336,6 +362,7 @@ const loadStats = async () => {
             </div>
           </div>
 
+          {/* Search and track list */}
           <div className="search-music-block">
             <h2><BsSearch /> Search for music</h2>
             <div className="search-wrapper">
@@ -376,7 +403,7 @@ const loadStats = async () => {
           </div>
         </div>
 
-        {/* Правая колонка */}
+        {/* Right column: upload block, Top24, ListeningNow */}
         <div className="right-column">
           <div className="upload-block">
             <h2><BsUpload /> Upload your music</h2>
