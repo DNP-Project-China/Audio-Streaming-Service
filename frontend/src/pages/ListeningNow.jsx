@@ -1,13 +1,13 @@
 import { motion } from 'framer-motion';
-import { BsHeadphones, BsPlayFill, BsDownload, BsFire } from 'react-icons/bs';
+import { BsPlayFill, BsPauseFill, BsDownload, BsActivity } from 'react-icons/bs';
 
-export default function ListeningNow({ listeners, tracks, onPlay, onDownload, onTrackClick }) {
-  // Фильтруем треки, у которых есть хотя бы один слушатель
+export default function ListeningNow({ listeners, tracks, onPlay, onDownload, onTrackClick, currentTrack, isPlaying, onTogglePlay }) {
+  // Filter tracks that have at least one active listener
   const activeTracks = tracks.filter(track => (listeners[track.id] || 0) > 0);
 
   return (
     <div className="listening-now-card">
-      <h2><BsHeadphones /> Listening now</h2>
+      <h2><BsActivity /> Listening now</h2>
       <div className="listening-list">
         {activeTracks.length > 0 ? (
           activeTracks.map(track => (
@@ -21,13 +21,13 @@ export default function ListeningNow({ listeners, tracks, onPlay, onDownload, on
               <span className="track-name">{track.filename}</span>
               <div className="track-actions" onClick={(e) => e.stopPropagation()}>
                 <span className="fire-badge">
-                  <BsFire /> {listeners[track.id]}
+                  <BsActivity /> {listeners[track.id]}
                 </span>
                 <button
                   className="icon-btn"
-                  onClick={() => onPlay(track)}
+                  onClick={() => (currentTrack && currentTrack.id === track.id) ? onTogglePlay() : onPlay(track)}
                 >
-                  <BsPlayFill />
+                  {currentTrack && currentTrack.id === track.id && isPlaying ? <BsPauseFill /> : <BsPlayFill />}
                 </button>
                 <button
                   className="icon-btn"

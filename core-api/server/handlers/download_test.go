@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// Response for download handler
 type downloadResp struct {
 	TrackID          string `json:"track_id"`
 	OriginalFilename string `json:"original_filename"`
@@ -25,6 +26,7 @@ type downloadResp struct {
 }
 
 func TestDownload_ReturnsURLAndDownloadsOriginalBytes(t *testing.T) {
+	// Load configuration and test dependencies
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -50,6 +52,7 @@ func TestDownload_ReturnsURLAndDownloadsOriginalBytes(t *testing.T) {
 	filename := "download-test.mp3"
 	fixture := []byte("ID3-download-test-payload")
 
+	// Seed object storage with fixture bytes
 	stored, err := trackStore.PutOriginal(ctx, "download-seed", filename, fixture, "audio/mpeg")
 	if err != nil {
 		t.Fatalf("store original test object: %v", err)
@@ -58,6 +61,7 @@ func TestDownload_ReturnsURLAndDownloadsOriginalBytes(t *testing.T) {
 		_ = s3store.DeleteObject(ctx, stored.Key)
 	}()
 
+	// Seed database with track metadata linked to stored object
 	track, err := queries.CreateTrack(ctx, repositories.CreateTrackParams{
 		Artist:            artist,
 		Title:             title,
@@ -77,6 +81,7 @@ func TestDownload_ReturnsURLAndDownloadsOriginalBytes(t *testing.T) {
 	req = mux.SetURLVars(req, map[string]string{"track_id": track.ID.String()})
 	res := httptest.NewRecorder()
 
+	// Request a download URL and validate response payload
 	h.ServeHTTP(res, req)
 
 	if res.Code != http.StatusOK {
@@ -97,6 +102,7 @@ func TestDownload_ReturnsURLAndDownloadsOriginalBytes(t *testing.T) {
 		t.Fatalf("download_url is empty")
 	}
 
+	// Download original bytes by returned URL and compare with fixture
 	httpResp, err := http.Get(out.DownloadURL)
 	if err != nil {
 		t.Fatalf("download by returned url: %v", err)
@@ -119,6 +125,7 @@ func TestDownload_ReturnsURLAndDownloadsOriginalBytes(t *testing.T) {
 }
 
 func TestDownload_InvalidTrackID_Returns400(t *testing.T) {
+	// Build handler with real dependencies
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -136,6 +143,7 @@ func TestDownload_InvalidTrackID_Returns400(t *testing.T) {
 	req = mux.SetURLVars(req, map[string]string{"track_id": "not-a-uuid"})
 	res := httptest.NewRecorder()
 
+	// Invalid UUID should be rejected by validation
 	h.ServeHTTP(res, req)
 
 	if res.Code != http.StatusBadRequest {
@@ -144,6 +152,7 @@ func TestDownload_InvalidTrackID_Returns400(t *testing.T) {
 }
 
 func TestDownload_MissingTrack_Returns404(t *testing.T) {
+	// Build handler with real dependencies
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -162,6 +171,7 @@ func TestDownload_MissingTrack_Returns404(t *testing.T) {
 	req = mux.SetURLVars(req, map[string]string{"track_id": missing})
 	res := httptest.NewRecorder()
 
+	// Missing track should return not found
 	h.ServeHTTP(res, req)
 
 	if res.Code != http.StatusNotFound {

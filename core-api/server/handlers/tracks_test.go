@@ -36,6 +36,7 @@ type tracksResp struct {
 }
 
 func TestTracks_OneReadyTrack(t *testing.T) {
+	// Load configuration and initialize handler dependencies
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -58,6 +59,7 @@ func TestTracks_OneReadyTrack(t *testing.T) {
 	uploadHandler := NewUploadHandler(cfg, queries, tracksUC, pub)
 	h := NewTracksHandler(queries)
 
+	// Upload one fixture track and mark it ready
 	fixture, err := os.ReadFile(filepath.Join("testdata", "testfile.mp3"))
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
@@ -85,6 +87,7 @@ func TestTracks_OneReadyTrack(t *testing.T) {
 		cleanupTrackAndObject(ctx, queries, s3store, track.ID)
 	})
 
+	// Query /tracks and verify created item is present
 	req := httptest.NewRequest(http.MethodGet, "/tracks", nil)
 	res := httptest.NewRecorder()
 
@@ -103,6 +106,7 @@ func TestTracks_OneReadyTrack(t *testing.T) {
 		t.Fatalf("expected at least one ready track, got total=%d", out.Total)
 	}
 
+	// Validate fields for the created track
 	found := false
 	for _, item := range out.Items {
 		if item.TrackID == track.ID.String() {
@@ -122,6 +126,7 @@ func TestTracks_OneReadyTrack(t *testing.T) {
 }
 
 func TestTracks_ThreeReadyTracksNewestFirst(t *testing.T) {
+	// Load configuration and initialize handler dependencies
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -144,6 +149,7 @@ func TestTracks_ThreeReadyTracksNewestFirst(t *testing.T) {
 	uploadHandler := NewUploadHandler(cfg, queries, tracksUC, pub)
 	h := NewTracksHandler(queries)
 
+	// Create and publish three ready tracks in sequence
 	fixture, err := os.ReadFile(filepath.Join("testdata", "testfile.mp3"))
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
@@ -184,6 +190,7 @@ func TestTracks_ThreeReadyTracksNewestFirst(t *testing.T) {
 		}
 	})
 
+	// Query only ready tracks
 	req := httptest.NewRequest(http.MethodGet, "/tracks?status=ready", nil)
 	res := httptest.NewRecorder()
 	h.ServeHTTP(res, req)
@@ -197,6 +204,7 @@ func TestTracks_ThreeReadyTracksNewestFirst(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
+	// Build index map for position checks
 	positions := map[string]int{}
 	for idx, item := range out.Items {
 		positions[item.TrackID] = idx
@@ -208,6 +216,7 @@ func TestTracks_ThreeReadyTracksNewestFirst(t *testing.T) {
 		}
 	}
 
+	// Assert newest-first ordering for inserted tracks
 	first := positions[created[0].ID.String()]
 	second := positions[created[1].ID.String()]
 	third := positions[created[2].ID.String()]
@@ -217,6 +226,7 @@ func TestTracks_ThreeReadyTracksNewestFirst(t *testing.T) {
 }
 
 func TestTracks_InvalidStatus_Returns400(t *testing.T) {
+	// Build minimal tracks handler
 	cfg, err := server.NewConfig()
 	if err != nil {
 		t.Fatalf("load config: %v", err)
@@ -233,6 +243,7 @@ func TestTracks_InvalidStatus_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/tracks?status=wrong", nil)
 	res := httptest.NewRecorder()
 
+	// Unknown status should fail validation
 	h.ServeHTTP(res, req)
 
 	if res.Code != http.StatusBadRequest {
@@ -241,6 +252,7 @@ func TestTracks_InvalidStatus_Returns400(t *testing.T) {
 }
 
 func uploadFixtureTrack(uploadHandler *UploadHandler, artist string, title string, filename string, body []byte) (string, error) {
+	// Build multipart upload request body
 	payload := &bytes.Buffer{}
 	mw := multipart.NewWriter(payload)
 	_ = mw.WriteField("artist", artist)
@@ -257,6 +269,7 @@ func uploadFixtureTrack(uploadHandler *UploadHandler, artist string, title strin
 		return "", fmt.Errorf("close multipart writer: %w", err)
 	}
 
+	// Execute upload request
 	req := httptest.NewRequest(http.MethodPost, "/upload", payload)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	res := httptest.NewRecorder()
@@ -271,13 +284,16 @@ func uploadFixtureTrack(uploadHandler *UploadHandler, artist string, title strin
 		return "", fmt.Errorf("decode upload response: %w", err)
 	}
 
+	// Return created track id for follow-up assertions
 	return out.TrackID, nil
 }
 
 func cleanupTrackAndObject(ctx context.Context, queries *repositories.Queries, s3store *storage.S3Storage, trackID pgtype.UUID) {
+	// Remove source object when track lookup succeeds
 	track, err := queries.GetTrackByID(ctx, trackID)
 	if err == nil {
 		_ = s3store.DeleteObject(ctx, track.OriginalObjectKey)
 	}
+	// Remove database row even if object deletion fails
 	_ = queries.DeleteTrackByID(ctx, trackID)
 }

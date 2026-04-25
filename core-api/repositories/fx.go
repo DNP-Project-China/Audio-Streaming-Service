@@ -8,6 +8,7 @@ import (
 	"go.uber.org/fx"
 )
 
+// DI for database
 var Module = fx.Options(
 	fx.Provide(
 		fx.Annotate(
@@ -18,7 +19,7 @@ var Module = fx.Options(
 	),
 )
 
-// TODO: find a way to change context.Background() to app context
+// DI constructor for PG connection pool
 func NewPool(lc fx.Lifecycle, cfg *server.Config) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL())
 
@@ -26,6 +27,7 @@ func NewPool(lc fx.Lifecycle, cfg *server.Config) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
+	// Ensure the pool is closed when the application stops
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
 			pool.Close()
@@ -36,6 +38,7 @@ func NewPool(lc fx.Lifecycle, cfg *server.Config) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
+// DI constructor for Queries (database interactor)
 func NewQueries(db DBTX) *Queries {
 	return New(db)
 }

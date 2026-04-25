@@ -12,8 +12,7 @@ CREATE TABLE tracks (
   status track_status NOT NULL DEFAULT 'pending',
   uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  hls_playlist_key VARCHAR(512),
-  total_plays BIGINT NOT NULL DEFAULT 0 CHECK (total_plays >= 0)
+  hls_playlist_key VARCHAR(512)
 );
 
 CREATE INDEX idx_tracks_status_uploaded_at ON tracks (status, uploaded_at DESC);

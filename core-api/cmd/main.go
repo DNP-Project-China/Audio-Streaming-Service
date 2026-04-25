@@ -13,20 +13,29 @@ import (
 	"go.uber.org/fx"
 )
 
+// Application DI entrypoint
 func main() {
 	fx.New(
+		// Providing all the dependendencies
 		fx.Provide(
+			// Server configuration
 			server.NewConfig,
+			// Four routes
 			routes.AsRoute(routes.NewHealthHandler),
 			routes.AsRoute(handlers.NewUploadHandler),
 			routes.AsRoute(handlers.NewTracksHandler),
 			routes.AsRoute(handlers.NewDownloadHandler),
+			// Web server itself
 			routes.TakesRoutes(server.NewMux),
 			server.NewHTTPServer,
 		),
+		// Database interactor
 		repositories.Module,
+		// S3 client
 		storage.Module,
+		// Business logic
 		usecases.Module,
+		// Kafka producer
 		events.Module,
 
 		// Start web server

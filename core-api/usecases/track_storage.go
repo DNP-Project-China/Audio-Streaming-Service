@@ -14,12 +14,15 @@ import (
 	"go.uber.org/fx"
 )
 
+// DI for track storage use case
 var Module = fx.Options(
 	fx.Provide(NewTrackStorage),
 )
 
+// Allowed characters for track ID and other path segments: a-z, A-Z, 0-9, dot, underscore, hyphen
 var allowedSegment = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
+// Object returned by TrackStorage methods
 type StoredObject struct {
 	Key          string
 	Size         int64
@@ -27,15 +30,17 @@ type StoredObject struct {
 	PublicURL    string
 }
 
+// TrackStorage use case implementation
 type TrackStorage struct {
 	store *storage.S3Storage
 }
 
+// DI constructor for TrackStorage
 func NewTrackStorage(store *storage.S3Storage) *TrackStorage {
 	return &TrackStorage{store: store}
 }
 
-// SaveOriginalTrackFile stores source audio under raw/{track_id}/original{ext}.
+// Stores source audio under raw/{track_id}/original{ext}.
 func (s *TrackStorage) PutOriginal(ctx context.Context, trackID string, originalFilename string, body []byte, contentType string) (StoredObject, error) {
 	key, err := s.OriginalKey(trackID, originalFilename)
 	if err != nil {
@@ -62,6 +67,7 @@ func (s *TrackStorage) PutOriginal(ctx context.Context, trackID string, original
 	}, nil
 }
 
+// Retrieves the object bytes for a given key
 func (s *TrackStorage) Get(ctx context.Context, key string) ([]byte, error) {
 	if err := validateKey(key); err != nil {
 		return nil, err
@@ -70,6 +76,7 @@ func (s *TrackStorage) Get(ctx context.Context, key string) ([]byte, error) {
 	return s.store.GetObject(ctx, key)
 }
 
+// Removes the object with the given key from storage
 func (s *TrackStorage) Delete(ctx context.Context, key string) error {
 	if err := validateKey(key); err != nil {
 		return err
@@ -78,7 +85,9 @@ func (s *TrackStorage) Delete(ctx context.Context, key string) error {
 	return s.store.DeleteObject(ctx, key)
 }
 
+// Lists all raw objects for a given track ID
 func (s *TrackStorage) ListRaw(ctx context.Context, trackID string, maxKeys int32) ([]StoredObject, error) {
+	// Validate track ID and build prefix
 	trackID, err := normalizeSegment(trackID, "track id")
 	if err != nil {
 		return nil, err
@@ -90,6 +99,7 @@ func (s *TrackStorage) ListRaw(ctx context.Context, trackID string, maxKeys int3
 		return nil, err
 	}
 
+	// Convert ObjectInfo to StoredObject and build public URLs
 	result := make([]StoredObject, 0, len(items))
 	for _, item := range items {
 		url, urlErr := s.store.PublicObjectURL(item.Key)
@@ -108,7 +118,7 @@ func (s *TrackStorage) ListRaw(ctx context.Context, trackID string, maxKeys int3
 	return result, nil
 }
 
-// PresignOriginalTrackDownload creates temporary URL for GET /download/{track_id}.
+// Creates temporary URL for GET /download/{track_id}.
 func (s *TrackStorage) PresignOriginalDownload(ctx context.Context, trackID string, originalFilename string, expires time.Duration) (string, string, error) {
 	key, err := s.OriginalKey(trackID, originalFilename)
 	if err != nil {
@@ -123,6 +133,7 @@ func (s *TrackStorage) PresignOriginalDownload(ctx context.Context, trackID stri
 	return key, url, nil
 }
 
+// Generates a presigned URL for uploading an object to S3
 func (s *TrackStorage) PresignUpload(ctx context.Context, key string, contentType string, expires time.Duration) (string, error) {
 	if err := validateKey(key); err != nil {
 		return "", err
@@ -134,6 +145,7 @@ func (s *TrackStorage) PresignUpload(ctx context.Context, key string, contentTyp
 	return s.store.PresignPutURL(ctx, key, contentType, expires)
 }
 
+// Generates a presigned URL for downloading an object from S3
 func (s *TrackStorage) PresignDownload(ctx context.Context, key string, expires time.Duration) (string, error) {
 	if err := validateKey(key); err != nil {
 		return "", err
@@ -142,6 +154,7 @@ func (s *TrackStorage) PresignDownload(ctx context.Context, key string, expires 
 	return s.store.PresignGetURL(ctx, key, expires)
 }
 
+// Builds the S3 key for the original track file based on track ID and original filename
 func (s *TrackStorage) OriginalKey(trackID string, originalFilename string) (string, error) {
 	trackID, err := normalizeSegment(trackID, "track id")
 	if err != nil {
@@ -165,6 +178,7 @@ func (s *TrackStorage) OriginalKey(trackID string, originalFilename string) (str
 	return path.Join("raw", trackID, "original"+ext), nil
 }
 
+// Validates that the file extension is a supported audio format
 func validateAudioExtension(ext string) error {
 	switch ext {
 	case ".mp3", ".flac", ".wav", ".aac", ".m4a", ".ogg":
@@ -174,6 +188,7 @@ func validateAudioExtension(ext string) error {
 	}
 }
 
+// Normalizes and validates a path segment
 func normalizeSegment(value string, field string) (string, error) {
 	value = strings.TrimSpace(value)
 	value = strings.TrimPrefix(path.Clean("/"+value), "/")
@@ -189,6 +204,7 @@ func normalizeSegment(value string, field string) (string, error) {
 	return value, nil
 }
 
+// Validates that the key is a non-empty string without path traversal
 func validateKey(key string) error {
 	key = strings.TrimSpace(strings.TrimPrefix(path.Clean("/"+key), "/"))
 	if key == "" || key == "." {

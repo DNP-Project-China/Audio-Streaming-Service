@@ -12,6 +12,7 @@ import (
 	"go.uber.org/fx"
 )
 
+// DI for Kafka
 var Module = fx.Options(
 	fx.Provide(
 		fx.Annotate(
@@ -21,14 +22,17 @@ var Module = fx.Options(
 	),
 )
 
+// Behavior for kafka producer
 type TranscodePublisher interface {
 	PublishCreated(ctx context.Context, trackID string, path string, priority int) error
 }
 
+// Implementation of TranscodePublisher
 type KafkaTranscodePublisher struct {
 	writer *kafka.Writer
 }
 
+// Kafka message type
 type transcodeJobCreated struct {
 	JobID    string `json:"job_id"`
 	TrackID  string `json:"track_id"`
@@ -36,6 +40,7 @@ type transcodeJobCreated struct {
 	Priority int    `json:"priority"`
 }
 
+// DI constructor for producer
 func NewTranscodePublisher(lc fx.Lifecycle, cfg *server.Config) *KafkaTranscodePublisher {
 	brokers := strings.Split(cfg.KafkaBrokers, ",")
 	for i := range brokers {
@@ -52,6 +57,7 @@ func NewTranscodePublisher(lc fx.Lifecycle, cfg *server.Config) *KafkaTranscodeP
 		ReadTimeout:            cfg.KafkaReadTimeout,
 	}
 
+	// Ensure the writer is closed when the application stops
 	lc.Append(fx.Hook{
 		OnStop: func(ctx context.Context) error {
 			return writer.Close()
@@ -61,6 +67,7 @@ func NewTranscodePublisher(lc fx.Lifecycle, cfg *server.Config) *KafkaTranscodeP
 	return &KafkaTranscodePublisher{writer: writer}
 }
 
+// Publish a transcode job creation event to Kafka
 func (p *KafkaTranscodePublisher) PublishCreated(ctx context.Context, trackID string, path string, priority int) error {
 	payload := transcodeJobCreated{
 		JobID:    fmt.Sprintf("job-%d", time.Now().UnixNano()),

@@ -1,136 +1,290 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
+import { BsPlayFill, BsPauseFill, BsDownload, BsFire, BsHeadphones, BsUpload, BsRewind, BsFastForward, BsSearch, BsActivity, BsVolumeUpFill } from 'react-icons/bs';
 import Hls from 'hls.js';
-import { BsPlayFill, BsDownload, BsFire, BsHeadphones, BsUpload, BsRewind, BsFastForward, BsSearch } from 'react-icons/bs';
 import Top24 from './Top24';
 import UploadModal from './UploadModal';
 import ListeningNow from './ListeningNow';
 import TrackPlayerModal from './TrackPlayerModal';
 
 export default function Home() {
+  // State for track list, current playing track, listener counts, play counts, modal visibility, search, player modal, playback progress
   const [tracks, setTracks] = useState([]);
   const [currentTrack, setCurrentTrack] = useState(null);
   const [listeners, setListeners] = useState({});
+  const [plays, setPlays] = useState([]);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isPlayerModalOpen, setIsPlayerModalOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Refs for audio element, HLS instance, and ping interval
   const audioRef = useRef(null);
+  const hlsRef = useRef(null);
   const pingInterval = useRef(null);
 
-  // ---------- МОКОВЫЕ ДАННЫЕ ДЛЯ ТЕСТИРОВАНИЯ (15 треков для скролла) ----------
-  const mockTracks = [
-    { id: '1', filename: 'Test Track 1 (Mock)' },
-    { id: '2', filename: 'Another Mock Track' },
-    { id: '3', filename: 'Chill Beats' },
-    { id: '4', filename: 'Summer Vibes' },
-    { id: '5', filename: 'Midnight Rain' },
-    { id: '6', filename: 'Electric Dreams' },
-    { id: '7', filename: 'Lost in Space' },
-    { id: '8', filename: 'Neon Lights' },
-    { id: '9', filename: 'Ocean Drive' },
-    { id: '10', filename: 'Retro Wave' },
-    { id: '11', filename: 'Funk Odyssey' },
-    { id: '12', filename: 'Deep House' },
-    { id: '13', filename: 'Jazz Lofi' },
-    { id: '14', filename: 'Rock Classic' },
-    { id: '15', filename: 'Acoustic Session' }
-  ];
-  const mockListeners = {
-    '1': 3, '2': 1, '3': 0, '4': 2, '5': 5, '6': 0,
-    '7': 1, '8': 4, '9': 2, '10': 3, '11': 0, '12': 1,
-    '13': 2, '14': 3, '15': 1
+  // Fetch all tracks from the API
+  const loadTracks = async () => {
+    try {
+      const res = await fetch('/api/tracks');
+      const data = await res.json();
+      const mapped = data.items.map(track => ({
+        id: track.track_id,
+        filename: `${track.artist} - ${track.title}`,
+        original_filename: track.original_filename,
+        status: track.status
+      }));
+      setTracks(mapped);
+    } catch (err) {
+      console.error('Failed to load tracks', err);
+      setTracks([]);
+    }
   };
 
-  useEffect(() => {
-    setTracks(mockTracks);
-    setListeners(mockListeners);
+  // Fetch live statistics (listeners and total plays per track)
+  const loadStats = async () => {
+    try {
+      const res = await fetch('/stats/live');
+      const data = await res.json();
+      const listenersMap = {};
+      const playsMap = {};
 
-    const mockInterval = setInterval(() => {
-      setListeners(prev => {
-        const newListeners = { ...prev };
-        Object.keys(newListeners).forEach(id => {
-          newListeners[id] = Math.max(0, (newListeners[id] || 0) + Math.floor(Math.random() * 3) - 1);
+      if (data.items && Array.isArray(data.items)) {
+        data.items.forEach(item => {
+          listenersMap[item.track_id] = item.online_now || 0;
+          playsMap[item.track_id] = item.total_plays || 0;
         });
-        return newListeners;
-      });
+      }
+
+      setListeners(listenersMap);
+      setPlays(playsMap);
+    } catch (err) {
+      console.error('Failed to load statistics', err);
+      setListeners({});
+      setPlays({})
+    }
+  };
+
+  // Initial load and periodic refresh of tracks and stats
+  useEffect(() => {
+    loadTracks();
+    loadStats();
+
+    const interval = setInterval(() => {
+      loadStats();
+      loadTracks();
     }, 5000);
 
-    return () => {
-      clearInterval(mockInterval);
-      if (pingInterval.current) clearInterval(pingInterval.current);
-    };
+    return () => clearInterval(interval);
   }, []);
 
-  const sendEvent = (event, trackId) => {
-    fetch('/tracking/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event,
-        track_id: trackId,
-        session_id: localStorage.getItem('sessionId'),
-        ts: Date.now()
-      })
-    }).catch(() => {});
+  // --- Playback tracking functions ---
+  // Start a playback session for a track
+  const startPlayback = async (trackId) => {
+    try {
+      await fetch(`/tracking/play/${trackId}`); // GET request (initiates a session)
+    } catch (err) {
+      console.error('Failed to start playback tracking', err);
+    }
   };
 
-  const playTrack = (track) => {
+  // Send periodic ping to keep the session alive
+  const sendPing = async (trackId) => {
+    try {
+      await fetch('/tracking/ping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          track_id: trackId,
+          user_session: localStorage.getItem('sessionId')
+        })
+      });
+    } catch (err) {}
+  };
+
+  // Start the ping loop for a given track (if not already running)
+  const ensurePingLoop = (trackId) => {
+    if (!trackId || pingInterval.current) return;
+    sendPing(trackId);
+    pingInterval.current = setInterval(() => sendPing(trackId), 10000);
+  };
+
+  // Stop the playback session for a track
+  const sendStop = async (trackId) => {
+    try {
+      await fetch('/tracking/stop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          track_id: trackId,
+          user_session: localStorage.getItem('sessionId')
+        })
+      });
+    } catch (err) {}
+  };
+
+  // Main play function: stops current playback, starts new session, loads HLS stream
+  const playTrack = async (track) => {
+    // Stop previous track if any
     if (pingInterval.current) {
       clearInterval(pingInterval.current);
-      if (currentTrack) sendEvent('stop', currentTrack.id);
+      if (currentTrack) await sendStop(currentTrack.id);
     }
     setCurrentTrack(track);
-    const hlsUrl = `/api/stream/${track.id}/master.m3u8`;
-    if (Hls.isSupported()) {
-      const hls = new Hls();
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(audioRef.current);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        audioRef.current.play();
-        sendEvent('start', track.id);
-        pingInterval.current = setInterval(() => sendEvent('ping', track.id), 10000);
-      });
-    } else if (audioRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-      audioRef.current.src = hlsUrl;
-      audioRef.current.addEventListener('canplay', () => {
-        audioRef.current.play();
-        sendEvent('start', track.id);
-        pingInterval.current = setInterval(() => sendEvent('ping', track.id), 10000);
-      });
+    try {
+      const res = await fetch(`/tracking/play/${track.id}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to start playback');
+      }
+      
+      const data = await res.json();
+      
+      if (data.playlist_url) {
+        // Use HLS.js if supported
+        if (Hls.isSupported()) {
+          if (hlsRef.current) {
+            hlsRef.current.destroy();
+          }
+          const hls = new Hls();
+          hlsRef.current = hls;
+          hls.loadSource(data.playlist_url);
+          hls.attachMedia(audioRef.current);
+          hls.on(Hls.Events.MANIFEST_PARSED, function () {
+            audioRef.current.play().catch(e => console.error('Play error:', e));
+          });
+        // Fallback for native HLS support (Safari)
+        } else if (audioRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+          audioRef.current.src = data.playlist_url;
+          audioRef.current.addEventListener('loadedmetadata', function () {
+            audioRef.current.play().catch(e => console.error('Play error:', e));
+          });
+        } else {
+          throw new Error('HLS is not supported in this browser');
+        }
+        
+        // Start sending pings for this track
+        ensurePingLoop(track.id);
+      } else {
+        throw new Error('No playlist URL');
+      }
+    } catch (err) {
+      console.error('playTrack error:', err);
+      alert('Cannot play track: ' + err.message);
     }
   };
 
+  // Download a track by its ID
   const downloadTrack = async (id) => {
     try {
       const res = await fetch(`/api/download/${id}`);
       const data = await res.json();
-      if (data.url) window.open(data.url, '_blank');
+      if (data.download_url) window.open(data.download_url, '_blank');
+      else alert('Download link not available');
     } catch (err) {
       alert('Download link unavailable');
     }
   };
 
+  // Seek forward/backward by a given number of seconds
   const skip = (seconds) => {
     if (audioRef.current) {
       audioRef.current.currentTime += seconds;
     }
   };
 
+  // Stop tracking when audio is paused or the page is closed
   useEffect(() => {
-    return () => {
+    const handlePause = () => {
       if (currentTrack && pingInterval.current) {
-        sendEvent('stop', currentTrack.id);
+        sendStop(currentTrack.id);
+        clearInterval(pingInterval.current);
+        pingInterval.current = null;
       }
     };
+    const handleBeforeUnload = () => {
+      if (currentTrack) sendStop(currentTrack.id);
+    };
+    const audio = audioRef.current;
+    if (audio) {
+      audio.addEventListener('pause', handlePause);
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      return () => {
+        audio.removeEventListener('pause', handlePause);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        if (currentTrack) sendStop(currentTrack.id);
+      };
+    }
   }, [currentTrack]);
 
+  // Filter tracks based on search input
   const filteredTracks = tracks.filter(track =>
     track.filename.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Handle track click: play if different track, then open full player modal
   const handleTrackClick = (track) => {
-    playTrack(track);
+    if (!currentTrack || currentTrack.id !== track.id) {
+      playTrack(track);
+    }
     setIsPlayerModalOpen(true);
+  };
+
+  // Seek from progress bar
+  const handleSeek = (e) => {
+    const newTime = Number(e.target.value);
+    setCurrentTime(newTime);
+    if (audioRef.current) {
+      audioRef.current.currentTime = newTime;
+    }
+  };
+
+  // Toggle play/pause
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+        if (currentTrack) {
+          ensurePingLoop(currentTrack.id);
+        }
+      }
+    }
+  };
+
+  // Volume control
+  const handleVolumeChange = (e) => {
+    const newVol = parseFloat(e.target.value);
+    setVolume(newVol);
+    if (audioRef.current) {
+      audioRef.current.volume = newVol;
+    }
+  };
+
+  // Update current time while playing
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  // Store media duration when metadata loads
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  // Helper to format time in mm:ss
+  const formatTime = (time) => {
+    if (isNaN(time) || time === Infinity) return '0:00';
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
   return (
@@ -141,22 +295,74 @@ export default function Home() {
       className="home-container"
     >
       <div className="two-columns">
-        {/* ЛЕВАЯ КОЛОНКА */}
+        {/* Left column: now playing card + search + track list */}
         <div className="left-column">
           <div className="now-playing-card no-cover">
-            <h2><BsHeadphones /> Now Playing</h2>
+            <h2><BsHeadphones /> Playing Now</h2>
             <div className="track-title">{currentTrack?.filename || '—'}</div>
-            <audio ref={audioRef} controls />
-            <div className="skip-buttons">
-              <button className="skip-btn" onClick={() => skip(-10)}>
-                <BsRewind /> <span>10</span>
-              </button>
-              <button className="skip-btn" onClick={() => skip(10)}>
-                <BsFastForward /> <span>10</span>
-              </button>
+            <audio 
+              ref={audioRef}
+              onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleLoadedMetadata}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={() => setIsPlaying(false)}
+            />
+
+            {/* Progress bar */}
+            <div className="track-progress-container" style={{ width: '100%', marginBottom: '20px', padding: '0 20px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#8b9bb4', marginBottom: '8px' }}>
+                <span>{formatTime(currentTime)}</span>
+                <span>{formatTime(duration)}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={isFinite(duration) ? duration : 0}
+                step="0.01"
+                value={currentTime}
+                onChange={handleSeek}
+                style={{ width: '100%', cursor: 'pointer', accentColor: '#00f3ff' }}
+              />
+            </div>
+            
+            {/* Playback controls, volume, and track stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '20px', marginTop: '15px' }}>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '5px', color: '#8b9bb4' }}>
+                <BsVolumeUpFill />
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
+                  onChange={handleVolumeChange}
+                  style={{ width: '80px', accentColor: '#00f3ff', cursor: 'pointer' }}
+                />
+              </div>
+                          
+              <div className="skip-buttons" style={{ margin: 0, padding: 0 }}>
+                <button className="skip-btn" onClick={() => skip(-10)}><BsRewind /><span>10</span></button>
+                <button className="play-pause-btn" onClick={togglePlay}>
+                  {isPlaying ? <BsPauseFill /> : <BsPlayFill />}
+                </button>
+                <button className="skip-btn" onClick={() => skip(10)}><BsFastForward /><span>10</span></button>
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '15px', color: '#8b9bb4' }}>
+                <span className="fire-badge" style={{ fontSize: '1rem', marginRight: '5px' }}>
+                  <BsFire /> {currentTrack ? (plays[currentTrack.id] || 0) : 0}
+                </span>
+                <span className="fire-badge" style={{ fontSize: '1rem' }}>
+                  <BsActivity /> {currentTrack ? (listeners[currentTrack.id] || 0) : 0}
+                </span>
+                <button className="icon-btn" onClick={() => currentTrack && downloadTrack(currentTrack.id)} disabled={!currentTrack}><BsDownload /></button>
+              </div>
             </div>
           </div>
 
+          {/* Search and track list */}
           <div className="search-music-block">
             <h2><BsSearch /> Search for music</h2>
             <div className="search-wrapper">
@@ -179,25 +385,16 @@ export default function Home() {
                 >
                   <span className="track-name">{track.filename}</span>
                   <div className="track-actions" onClick={(e) => e.stopPropagation()}>
-                    <span className="fire-badge"><BsFire /> {listeners[track.id] || 0}</span>
-                    <button
-                      className="icon-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playTrack(track);
-                      }}
-                    >
-                      <BsPlayFill />
+                    <span className="fire-badge" style={{ marginRight: '5px' }}>
+                      <BsFire /> {plays[track.id] || 0}
+                    </span>
+                    <span className="fire-badge">
+                      <BsActivity /> {listeners[track.id] || 0}
+                    </span>
+                    <button className="icon-btn" onClick={() => (currentTrack && currentTrack.id === track.id) ? togglePlay() : playTrack(track)}>
+                      {currentTrack && currentTrack.id === track.id && isPlaying ? <BsPauseFill /> : <BsPlayFill />}
                     </button>
-                    <button
-                      className="icon-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadTrack(track.id);
-                      }}
-                    >
-                      <BsDownload />
-                    </button>
+                    <button className="icon-btn" onClick={() => downloadTrack(track.id)}><BsDownload /></button>
                   </div>
                 </motion.div>
               ))}
@@ -206,38 +403,44 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ПРАВАЯ КОЛОНКА */}
+        {/* Right column: upload block, Top24, ListeningNow */}
         <div className="right-column">
           <div className="upload-block">
             <h2><BsUpload /> Upload your music</h2>
-            <button className="upload-center-btn" onClick={() => setIsUploadModalOpen(true)}>
-              <BsUpload /> Upload
-            </button>
+            <button className="upload-center-btn" onClick={() => setIsUploadModalOpen(true)}><BsUpload /> Upload</button>
           </div>
-
           <Top24
             onPlay={playTrack}
             onDownload={downloadTrack}
             onTrackClick={handleTrackClick}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
           />
-
           <ListeningNow
             listeners={listeners}
             tracks={tracks}
             onPlay={playTrack}
             onDownload={downloadTrack}
             onTrackClick={handleTrackClick}
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
           />
         </div>
       </div>
 
-      <UploadModal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} />
-
-      <TrackPlayerModal
-        isOpen={isPlayerModalOpen}
-        onClose={() => setIsPlayerModalOpen(false)}
-        track={currentTrack}
-        audioRef={audioRef}
+      <UploadModal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} onUpload={loadTracks} />
+      <TrackPlayerModal 
+        isOpen={isPlayerModalOpen} 
+        onClose={() => setIsPlayerModalOpen(false)} 
+        track={currentTrack} 
+        currentTime={currentTime}
+        duration={duration}
+        isPlaying={isPlaying}
+        onSeek={handleSeek}
+        onTogglePlay={togglePlay}
+        onSkip={skip}
       />
     </motion.div>
   );

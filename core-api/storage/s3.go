@@ -16,6 +16,7 @@ import (
 	"go.uber.org/fx"
 )
 
+// DI for S3 storage
 var Module = fx.Options(
 	fx.Provide(NewS3Storage),
 )
@@ -33,6 +34,7 @@ type ObjectInfo struct {
 	LastModified *time.Time
 }
 
+// DI constructor for S3Storage
 func NewS3Storage(cfg *server.Config) (*S3Storage, error) {
 	store := &S3Storage{
 		bucket: cfg.S3Bucket,
@@ -60,6 +62,7 @@ func NewS3Storage(cfg *server.Config) (*S3Storage, error) {
 	return store, nil
 }
 
+// Getter for bucket name
 func (s *S3Storage) Bucket() string {
 	if s == nil {
 		return ""
@@ -67,6 +70,7 @@ func (s *S3Storage) Bucket() string {
 	return s.bucket
 }
 
+// Convenience method to put an object into S3
 func (s *S3Storage) PutObject(ctx context.Context, key string, body io.Reader, size int64, contentType string) error {
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(s.bucket),
@@ -82,6 +86,7 @@ func (s *S3Storage) PutObject(ctx context.Context, key string, body io.Reader, s
 	return nil
 }
 
+// Convenience method to check if an object exists in S3
 func (s *S3Storage) HeadObject(ctx context.Context, key string) error {
 	_, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
 		Bucket: aws.String(s.bucket),
@@ -94,6 +99,7 @@ func (s *S3Storage) HeadObject(ctx context.Context, key string) error {
 	return nil
 }
 
+// Convenience method to get an object from S3
 func (s *S3Storage) GetObject(ctx context.Context, key string) ([]byte, error) {
 	out, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
@@ -112,7 +118,9 @@ func (s *S3Storage) GetObject(ctx context.Context, key string) ([]byte, error) {
 	return data, nil
 }
 
+// List objects in S3 with a given prefix
 func (s *S3Storage) ListObjects(ctx context.Context, prefix string, maxKeys int32) ([]ObjectInfo, error) {
+	// Default maxKeys to 100 if not set or invalid
 	if maxKeys <= 0 {
 		maxKeys = 100
 	}
@@ -126,6 +134,7 @@ func (s *S3Storage) ListObjects(ctx context.Context, prefix string, maxKeys int3
 		return nil, fmt.Errorf("list objects %q: %w", prefix, err)
 	}
 
+	// Convert AWS SDK's object list to ObjectInfo slice
 	items := make([]ObjectInfo, 0, len(out.Contents))
 	for _, obj := range out.Contents {
 		items = append(items, ObjectInfo{
@@ -138,6 +147,7 @@ func (s *S3Storage) ListObjects(ctx context.Context, prefix string, maxKeys int3
 	return items, nil
 }
 
+// Convenience method to delete an object from S3
 func (s *S3Storage) DeleteObject(ctx context.Context, key string) error {
 	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
@@ -150,6 +160,7 @@ func (s *S3Storage) DeleteObject(ctx context.Context, key string) error {
 	return nil
 }
 
+// Generate a presigned URL for getting an object from S3
 func (s *S3Storage) PresignGetURL(ctx context.Context, key string, expires time.Duration) (string, error) {
 	out, err := s.presign.PresignGetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
@@ -164,6 +175,7 @@ func (s *S3Storage) PresignGetURL(ctx context.Context, key string, expires time.
 	return out.URL, nil
 }
 
+// Generate a presigned URL for putting an object into S3
 func (s *S3Storage) PresignPutURL(ctx context.Context, key string, contentType string, expires time.Duration) (string, error) {
 	out, err := s.presign.PresignPutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(s.bucket),
@@ -179,6 +191,7 @@ func (s *S3Storage) PresignPutURL(ctx context.Context, key string, contentType s
 	return out.URL, nil
 }
 
+// Build a public URL for an object in S3
 func (s *S3Storage) PublicObjectURL(key string) (string, error) {
 	if s == nil || s.cfg == nil {
 		return "", fmt.Errorf("storage config is nil")

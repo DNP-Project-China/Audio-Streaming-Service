@@ -1,4 +1,4 @@
-/* ---------- Глобальные переменные ---------- */
+/* ---------- Global Variables ---------- */
 :root {
   --bg-dark: #0a0c12;
   --bg-card: rgba(18, 25, 45, 0.65);
@@ -30,7 +30,7 @@ body {
   color: var(--text);
 }
 
-/* ---------- Шапка на всю ширину ---------- */
+/* ---------- Full‑width Header ---------- */
 .header {
   background: rgba(10, 15, 25, 0.8);
   backdrop-filter: blur(12px);
@@ -76,7 +76,7 @@ body {
   display: none;
 }
 
-/* ---------- Контейнер с отступами по бокам ---------- */
+/* ---------- Container with side margins ---------- */
 .home-container {
   width: 100%;
   padding: 0 16px;
@@ -107,7 +107,7 @@ body {
   min-width: 0;
 }
 
-/* Общие стили для карточек */
+/* Common card styles */
 .now-playing-card,
 .search-music-block,
 .upload-block,
@@ -121,7 +121,7 @@ body {
   padding: 20px;
 }
 
-/* ---------- Плеер "Now Playing" ---------- */
+/* ---------- "Now Playing" Player ---------- */
 .now-playing-card.no-cover {
   text-align: center;
 }
@@ -175,7 +175,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   border-radius: 10px;
 }
 
-/* ---------- Блок поиска (растягивается по высоте, скролл) ---------- */
+/* ---------- Search block (expands, scrollable) ---------- */
 .search-music-block {
   display: flex;
   flex-direction: column;
@@ -216,14 +216,14 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
 .tracks-list {
   overflow-y: auto;
   padding-right: 8px;
-  padding-left: 6px;        /* добавлен левый отступ, чтобы свечение не обрезалось */
+  padding-left: 6px;        /* left padding so glow doesn't get clipped */
   scrollbar-width: thin;
   scrollbar-color: var(--accent) #1e1e2a;
   flex: 1;
   max-height: 300px;
 }
 
-/* ---------- Элемент трека (общий для левого, Top24 и Listening now) ---------- */
+/* ---------- Track row (shared for left, Top24, Listening now) ---------- */
 .track-item, .listening-item {
   background: rgba(10, 15, 25, 0.7);
   backdrop-filter: blur(8px);
@@ -240,7 +240,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
 }
 
 .track-item:hover, .listening-item:hover {
-  transform: scale(1.01);       /* вместо translateX, чтобы не вылезать за левый край */
+  transform: scale(1.01);       /* scale instead of translateX, prevents overflow on left */
   border-color: var(--accent);
   box-shadow: 0 0 12px rgba(0, 243, 255, 0.2);
 }
@@ -294,7 +294,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   transform: scale(1.05);
 }
 
-/* ---------- Блок Upload по центру ---------- */
+/* ---------- Upload block (centered) ---------- */
 .upload-block {
   text-align: center;
 }
@@ -328,7 +328,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   box-shadow: 0 0 15px var(--accent);
 }
 
-/* ---------- Top24 карточка (фиксированная высота + скролл) ---------- */
+/* ---------- Top24 card (fixed height + scroll) ---------- */
 .top24-card {
   display: flex;
   flex-direction: column;
@@ -350,12 +350,12 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
 .top24-list {
   overflow-y: auto;
   padding-right: 8px;
-  padding-left: 6px;        /* добавлен левый отступ */
+  padding-left: 6px;        /* left padding */
   scrollbar-width: thin;
   flex: 1;
 }
 
-/* Стилизация скроллбара для Top24 (такой же, как в Search и Listening now) */
+/* Scrollbar styling for Top24 (same as Search and Listening now) */
 .top24-list::-webkit-scrollbar {
   width: 4px;
 }
@@ -372,7 +372,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   scrollbar-color: var(--accent) #1e1e2a;
 }
 
-/* ---------- Блок Listening now (фиксированная высота) ---------- */
+/* ---------- Listening now block (fixed height) ---------- */
 .listening-now-card {
   display: flex;
   flex-direction: column;
@@ -397,12 +397,12 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   overflow-y: auto;
   flex: 1;
   padding-right: 4px;
-  padding-left: 6px;        /* добавлен левый отступ */
+  padding-left: 6px;        /* left padding */
   scrollbar-width: thin;
   scrollbar-color: var(--accent) #1e1e2a;
 }
 
-/* Стилизация скроллбара для Listening now */
+/* Scrollbar styling for Listening now */
 .listening-list::-webkit-scrollbar {
   width: 4px;
 }
@@ -421,7 +421,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   padding: 20px;
 }
 
-/* ---------- Модальное окно ---------- */
+/* ---------- Modal ---------- */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -508,7 +508,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   color: var(--text-muted);
 }
 
-/* ---------- Адаптивность ---------- */
+/* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .two-columns {
     flex-direction: column;
@@ -525,7 +525,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   }
 }
 
-/* Специальные стили для модального окна плеера */
+/* Special styles for track player modal */
 .track-player-modal {
   max-width: 400px;
   text-align: center;
@@ -547,7 +547,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   word-break: break-word;
 }
 
-/* Кнопки перемотки */
+/* Skip buttons row */
 .skip-buttons {
   display: flex;
   gap: 30px;
@@ -590,7 +590,7 @@ audio::-webkit-media-controls-timeline::-webkit-media-controls-timeline-progress
   color: #000;
 }
 
-/* Кастомные контролы в модальном окне плеера */
+/* Custom controls inside player modal */
 .custom-audio-controls {
   display: flex;
   gap: 20px;
