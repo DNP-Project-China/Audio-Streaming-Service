@@ -45,13 +45,13 @@ async def process_event(event: PlaybackEvent) -> None:
     track_id = str(event.track_id)
     key = f"online:track:{track_id}"
     top24key = f"top24:track:{track_id}"
-    # In user pins the track (start playing) we add the session to the sorted set with the timestamp, and remove old sessions that are out of the UPDATE_TIME_RATE window
+    # In user pins the track (start playing) we add the session to the sorted set with the timestamp, and remove old sessions that are out of the UPDATE_TIME_RATE window and TOP_24_UPDATE_RATE window
     if event.status == "playing":
         if not event.user_session:
             return
         await redis_client.zadd(key, {event.user_session: event.ts.timestamp()})
         await redis_client.zremrangebyscore(key, "-inf", event.ts.timestamp() - UPDATE_TIME_RATE)
-
+        
         await redis_client.zadd(top24key, {event.user_session: event.ts.timestamp()})
         await redis_client.zremrangebyscore(top24key, "-inf", event.ts.timestamp() - TOP_24_UPDATE_RATE)
 
@@ -285,6 +285,7 @@ async def stats():
         online_key = f"online:track:{track_id}"
         top24key = f"top24:track:{track_id}"
         now_ts = int(time.time())
+        # removing old sessions for online listeners and top 24h listeners to keep the sorted sets clean and accurate, then counting current online listeners and listeners in the last 24 hours
         await redis_client.zremrangebyscore(online_key, "-inf", now_ts - UPDATE_TIME_RATE)
         await redis_client.zremrangebyscore(top24key, "-inf", now_ts - TOP_24_UPDATE_RATE)
         online_now = await redis_client.zcard(online_key)
