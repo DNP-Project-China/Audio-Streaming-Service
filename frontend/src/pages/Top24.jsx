@@ -12,7 +12,9 @@ export default function Top24({ onPlay, onDownload, onTrackClick, currentTrack, 
         const data = await res.json();
         if (data.items && Array.isArray(data.items)) {
           // Sort by total_plays descending and take the top 3
-          const sorted = [...data.items].sort((a, b) => b.total_plays - a.total_plays);
+          //const sorted = [...data.items].sort((a, b) => b.total_plays - a.total_plays);
+          // Sort by last_24h descending and take the top 3
+          const sorted = [...data.items].sort((a, b) => b.last_24h - a.last_24h);
           setTopTracks(sorted.slice(0, 3));
         } else {
           setTopTracks([]);
@@ -47,7 +49,7 @@ export default function Top24({ onPlay, onDownload, onTrackClick, currentTrack, 
           >
             <span className="track-name">{idx+1}. {track.artist} - {track.title}</span>
             <div className="track-actions" onClick={(e) => e.stopPropagation()}>
-              <span className="fire-badge"><BsFire /> {track.total_plays || 0}</span>
+              <span className="fire-badge"><BsFire /> {track.last_24h || 0}</span>
               <button
                 className="icon-btn"
                 onClick={() => (currentTrack && currentTrack.id === track.track_id) ? onTogglePlay() : onPlay(getTrack(track))}
