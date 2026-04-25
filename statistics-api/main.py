@@ -23,6 +23,7 @@ consumer_task = None
 flush_task = None
 consumer_ready = False
 UPDATE_TIME_RATE = 20
+TOP_24_UPDATE_RATE = 24 * 60 * 60
 TOP_TRACKS_LIMIT = 10
 FLUSH_INTERVAL_SECONDS = 60
 RETRY_DELAY_SECONDS = 10
@@ -43,12 +44,17 @@ async def process_event(event: PlaybackEvent) -> None:
     # Take the track ID and create a key for the sorted set
     track_id = str(event.track_id)
     key = f"online:track:{track_id}"
+    top24key = f"top24:track:{track_id}"
     # In user pins the track (start playing) we add the session to the sorted set with the timestamp, and remove old sessions that are out of the UPDATE_TIME_RATE window
     if event.status == "playing":
         if not event.user_session:
             return
         await redis_client.zadd(key, {event.user_session: event.ts.timestamp()})
         await redis_client.zremrangebyscore(key, "-inf", event.ts.timestamp() - UPDATE_TIME_RATE)
+
+        await redis_client.zadd(top24key, {event.user_session: event.ts.timestamp()})
+        await redis_client.zremrangebyscore(top24key, "-inf", event.ts.timestamp() - TOP_24_UPDATE_RATE)
+
     # If the user stopped the track, we remove the session from the sorted set
     elif event.status in ("stopped", "stopped_by_timeout"):
         if not event.user_session:
@@ -277,9 +283,12 @@ async def stats():
     result = []
     for track_id, plays in top:
         online_key = f"online:track:{track_id}"
+        top24key = f"top24:track:{track_id}"
         now_ts = int(time.time())
         await redis_client.zremrangebyscore(online_key, "-inf", now_ts - UPDATE_TIME_RATE)
+        await redis_client.zremrangebyscore(top24key, "-inf", now_ts - TOP_24_UPDATE_RATE)
         online_now = await redis_client.zcard(online_key)
+        last_24h = await redis_client.zcard(top24key)
         result.append(
             {
                 "track_id": track_id,
@@ -287,6 +296,7 @@ async def stats():
                 "artist": info_by_id.get(track_id, {}).get("artist"),
                 "total_plays": int(plays),
                 "online_now": int(online_now),
+                "last_24h": int(last_24h),
             }
         )
     # Returning the result
