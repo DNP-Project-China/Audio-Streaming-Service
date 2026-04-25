@@ -157,7 +157,9 @@ async def flush_plays_once() -> None:
     # Eliminate Redis delta data collection after flushing to the database, to avoid overcounting
     # Delete the keys we just processed. We call HGETALL again to collect current keys
     # and then HDEL them to avoid deleting entries added after this function started.
-    hashes = list(redis_client.hgetall("plays:delta").keys())
+    # Read the hash atomically (await the coroutine) and extract keys
+    hashes_dict = await redis_client.hgetall("plays:delta")
+    hashes = list(hashes_dict.keys())
     if hashes:
         await redis_client.hdel("plays:delta", *hashes)
     print("flush: plays:delta cleared", flush=True)
