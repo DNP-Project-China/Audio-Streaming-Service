@@ -50,7 +50,7 @@ Please wait for the services to initialize (around 10-30 seconds, as Kafka and P
 
 ---
 
-## 🎧 Usage Guide
+## 🎧 Usage Guide (after localhost setup)
 
 Once successfully launched, the system is ready to use.
 
