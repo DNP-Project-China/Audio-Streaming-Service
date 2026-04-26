@@ -13,7 +13,7 @@ The project is built on a microservices architecture, heavily utilizing an event
 * **Playback API (Python/FastAPI):** Manages audio streaming sessions. Utilizes a **stateless session management** pattern via **Redis Keyspace Notifications** (distributed TTL) to detect client timeouts without running heavy in-memory polling loops.
 * **Statistics API (Python/FastAPI):** The real-time stream analytics engine. Based on Redis soted set updates music current online and total plays in time. Additionally implements the **Write-Behind Caching** pattern (aggregating state deltas in Redis (by using hashes) before batch-flushing to PostgreSQL) to protect the persistent storage from high I/O write loads during heavy streaming.
 * **Frontend (React/Vite):** Client-side Single Page Application (SPA).
-* **Infrastructure:** Apache Kafka (Message Broker), PostgreSQL (Relational DB), Redis (In-memory Cache/Session Store), MinIO (S3-compatible Object Storage), Docker & Docker Compose.
+* **Infrastructure:** Apache Kafka (Message Broker), PostgreSQL (Relational DB), Redis (In-memory Cache/Session Store), S3 Object Storage, Docker & Docker Compose.
 
 ---
 ## 🌐 Try Out
